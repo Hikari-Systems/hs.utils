@@ -96,9 +96,11 @@ const getOauthProfileByToken = async (token: string): Promise<OauthProfile> => {
 
 // ////////////////////////////
 
-export type GetUserByEmailFunction<T> = (email: string) => Promise<T>;
+export type GetUserByEmailFunction<T> = (email: string) => Promise<T | null>;
 export type AddUserByEmailFunction<T> = (email: string) => Promise<T>;
-export type GetOauthProfileBySubFunction<U> = (sub: string) => Promise<U>;
+export type GetOauthProfileBySubFunction<U> = (
+  sub: string,
+) => Promise<U | null>;
 export type UpsertOauthProfileFunction<U> = (
   sub: string,
   userId: string,
@@ -267,7 +269,7 @@ export const bearerMiddleware =
         log.error(`No email in dlProfile: ${JSON.stringify(dlProfile)}`);
         return res.status(401).send(`No oauth profile found`);
       }
-      const user: T = await getUserByEmail(dlProfile.email);
+      const user = await getUserByEmail(dlProfile.email);
       if (!user) {
         log.error(`No user found for email ${dlProfile.email}`);
         return res.status(401).send(`No user found for oauth profile`);

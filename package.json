@@ -1,10 +1,10 @@
 {
-  "name": "hs.utils",
+  "name": "@hikari-systems/hs.utils",
   "version": "0.0.2",
   "description": "General tools for use in Hikari Systems apps",
   "main": "es5/index.js",
   "author": "Rick Knowles <rick.knowles@hikari-systems.com>",
-  "license": "Proprietary",
+  "license": "SEE LICENSE IN LICENSE.md",
   "scripts": {
     "prepare": "npm run lint && npm run checkTypes && npm run build",
     "test": "jest",
@@ -45,5 +45,21 @@
     "sinon": "^4.1.3",
     "ts-jest": "^29.1.5",
     "typescript": "^5.5.2"
-  }
+  },
+  "directories": {
+    "lib": "lib"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hikari-Systems/hs-utils.git"
+  },
+  "keywords": [
+    "hikari",
+    "utilities"
+  ],
+  "types": "./es5/index.d.ts",
+  "bugs": {
+    "url": "https://github.com/Hikari-Systems/hs-utils/issues"
+  },
+  "homepage": "https://github.com/Hikari-Systems/hs-utils#readme"
 }
