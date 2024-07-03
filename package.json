@@ -13,7 +13,7 @@
     "build": "rm -rf ./es5 && tsc --declaration && npm run copy-dts",
     "test-ci": "npm run prepare && npm test",
     "format": "npx prettier --write --ignore-unknown \"**/*.*[t|j]s\"",
-    "copy-dts": "cp ./lib/*.d.ts es5"
+    "copy-dts": "cp ./lib/*.d.ts es5 && touch es5/types.js"
   },
   "dependencies": {
     "@types/express-serve-static-core": "^4.19.5",
