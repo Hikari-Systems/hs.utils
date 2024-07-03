@@ -117,6 +117,21 @@ export interface OauthProfileType {
   profileJson: string;
 }
 
+type ERROR_HANDLER_TYPE = (
+  err: Error,
+  req: LocalRequest,
+  res: LocalResponse,
+  next: LocalNextFunction,
+) => Promise<void>;
+
+const DEFAULT_ERROR_HANDLER =
+  (statusCode: number): ERROR_HANDLER_TYPE =>
+  (inErr, _inReq, inRes) => {
+    log.error(`Error ${statusCode}: ${inErr}`);
+    inRes.status(statusCode).send('Error');
+    return Promise.resolve();
+  };
+
 export const authorizeMiddleware = <
   T extends UserBaseType,
   U extends OauthProfileType,
@@ -125,64 +140,80 @@ export const authorizeMiddleware = <
   addUserByEmail: AddUserByEmailFunction<T>,
   getOauthProfileBySub: GetOauthProfileBySubFunction<U>,
   upsertOauthProfile: UpsertOauthProfileFunction<U>,
+  callbackErrorHandler = DEFAULT_ERROR_HANDLER(400),
 ) => {
   const router = express.Router();
   router.get(
     '/oauth2/callback',
-    async (req: LocalRequest, res: LocalResponse) => {
-      const { code, state } = req.query as { code: string; state: string };
+    async (req: LocalRequest, res: LocalResponse, next: LocalNextFunction) => {
+      const { code, state, error } = req.query as {
+        code?: string;
+        state: string;
+        error?: string;
+      };
       const { baseUrl } = forwardedFor(req);
-      log.debug(`Authorization callback: code=${code} state=${state}`);
+      log.debug(
+        `Authorization callback: code=${code} state=${state} error=${error}`,
+      );
+      if (error) {
+        return callbackErrorHandler(new Error(error), req, res, next);
+      }
+      if (!code) {
+        return callbackErrorHandler(
+          new Error('No code supplied'),
+          req,
+          res,
+          next,
+        );
+      }
       try {
         const tokenResp = await doTokenExchange(
           code,
           `${baseUrl}/oauth2/callback`,
         );
-        if (tokenResp?.access_token) {
-          const dlProfile = await getOauthProfileByToken(
-            tokenResp?.access_token,
-          );
-
-          let userId;
-          if (!dlProfile.email) {
-            const savedProfile = await getOauthProfileBySub(dlProfile.sub);
-            if (!savedProfile) {
-              const user = await addUserByEmail('');
-              userId = user.id;
-            } else {
-              userId = savedProfile.userId;
-            }
-          } else {
-            let user = await getUserByEmail(dlProfile.email);
-            if (!user) {
-              user = await addUserByEmail(dlProfile.email);
-            }
-            userId = user.id;
-          }
-
-          await upsertOauthProfile(
-            dlProfile.sub,
-            userId,
-            JSON.stringify(dlProfile),
-          );
-
-          req.session.user = {
-            userId,
-            accessToken: tokenResp.access_token,
-            refreshToken: tokenResp?.refresh_token,
-            expiresAt: tokenResp?.expires_in
-              ? dayjs().add(tokenResp.expires_in, 'second')
-              : null,
-          };
-
-          // validate state, get redirectUrl
-          const origUrl = (await getRedisVal(state)) || '/';
-          log.debug(`Redirecting to ${origUrl}`);
-          return res.redirect(origUrl);
+        if (!tokenResp?.access_token) {
+          throw new Error(`No access token in response`);
         }
-        return res.status(400).send('Invalid code');
-      } catch (err) {
-        return res.status(400).send('Invalid code');
+        const dlProfile = await getOauthProfileByToken(tokenResp?.access_token);
+
+        let userId;
+        if (!dlProfile.email) {
+          const savedProfile = await getOauthProfileBySub(dlProfile.sub);
+          if (!savedProfile) {
+            const user = await addUserByEmail('');
+            userId = user.id;
+          } else {
+            userId = savedProfile.userId;
+          }
+        } else {
+          let user = await getUserByEmail(dlProfile.email);
+          if (!user) {
+            user = await addUserByEmail(dlProfile.email);
+          }
+          userId = user.id;
+        }
+
+        await upsertOauthProfile(
+          dlProfile.sub,
+          userId,
+          JSON.stringify(dlProfile),
+        );
+
+        req.session.user = {
+          userId,
+          accessToken: tokenResp.access_token,
+          refreshToken: tokenResp?.refresh_token,
+          expiresAt: tokenResp?.expires_in
+            ? dayjs().add(tokenResp.expires_in, 'second')
+            : null,
+        };
+
+        // validate state, get redirectUrl
+        const origUrl = (await getRedisVal(state)) || '/';
+        log.debug(`Redirecting to ${origUrl}`);
+        return res.redirect(origUrl);
+      } catch (err: any) {
+        return callbackErrorHandler(err, req, res, next);
       }
     },
   );
@@ -250,29 +281,38 @@ export const authorizeMiddleware = <
 };
 
 export const bearerMiddleware =
-  <T extends UserBaseType>(getUserByEmail: GetUserByEmailFunction<T>) =>
+  <T extends UserBaseType>(
+    getUserByEmail: GetUserByEmailFunction<T>,
+    authErrorHandler = DEFAULT_ERROR_HANDLER(401),
+  ) =>
   async (req: LocalRequest, res: LocalResponse, next: LocalNextFunction) => {
     const authHeader = req.headers?.authorization?.trim();
     if (!authHeader?.toLowerCase().startsWith('bearer ')) {
-      log.error(`No authorization header`);
-      return res.status(401).send(`No authorization header`);
+      return authErrorHandler(
+        new Error(`No authorization header`),
+        req,
+        res,
+        next,
+      );
     }
     const token = authHeader.substring(7).trim();
     if (token === '') {
-      log.error(`No access token supplied`);
-      return res.status(401).send(`No access token supplied`);
+      return authErrorHandler(
+        new Error(`No access token supplied`),
+        req,
+        res,
+        next,
+      );
     }
     try {
       // Passing token to back end oauth-provider
       const dlProfile = await getOauthProfileByToken(token);
       if (!dlProfile?.email) {
-        log.error(`No email in dlProfile: ${JSON.stringify(dlProfile)}`);
-        return res.status(401).send(`No oauth profile found`);
+        throw new Error(`No email in dlProfile: ${JSON.stringify(dlProfile)}`);
       }
       const user = await getUserByEmail(dlProfile.email);
       if (!user) {
-        log.error(`No user found for email ${dlProfile.email}`);
-        return res.status(401).send(`No user found for oauth profile`);
+        throw new Error(`No user found for email ${dlProfile.email}`);
       }
       log.debug(`Token valid. Found user id=${user?.id}`);
 
@@ -280,10 +320,6 @@ export const bearerMiddleware =
       req.getAccessToken = async (): Promise<string | null> => token;
       return next();
     } catch (err: any) {
-      if (err.status === 401) {
-        return res.status(401).send(`Access token invalid`);
-      }
-      log.error(`Error trying to load user details for token: ${token}`, err);
-      return next(err);
+      return authErrorHandler(err, req, res, next);
     }
   };
