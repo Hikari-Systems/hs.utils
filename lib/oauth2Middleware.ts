@@ -25,6 +25,10 @@ type OauthProfile = {
   family_name?: string;
   name?: string;
   email?: string;
+  email_verified?: boolean;
+  nickname?: string;
+  picture?: string;
+  updated_at?: string;
 };
 
 const doTokenExchange = async (
