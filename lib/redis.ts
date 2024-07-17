@@ -42,6 +42,20 @@ export const setRedisVal = async (
   }
 };
 
+export const delRedisVal = async (key: string): Promise<void> => {
+  const redisConn = await redisClient.connect().catch((err) => {
+    log.error('Error in redis connection', err);
+  });
+  if (!redisConn) {
+    return;
+  }
+  try {
+    await redisConn.del(key);
+  } finally {
+    redisConn?.disconnect();
+  }
+};
+
 export const healthcheck = () =>
   new Promise<void>((resolve, reject) => {
     const testClient = createClient({

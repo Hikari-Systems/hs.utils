@@ -4,7 +4,7 @@ import { v4 } from 'uuid';
 
 import config from './config';
 import logging from './logging';
-import { getRedisVal, setRedisVal } from './redis';
+import { delRedisVal, getRedisVal, setRedisVal } from './redis';
 import { LocalNextFunction, LocalRequest, LocalResponse } from './types';
 import { forwardedFor } from './forwardedFor';
 
@@ -17,6 +17,7 @@ type TokenResponse = {
   scope: string;
   token_type: string;
   id_token: string;
+  nonce?: string;
 };
 
 type OauthProfile = {
@@ -128,6 +129,38 @@ type ERROR_HANDLER_TYPE = (
   next: LocalNextFunction,
 ) => Promise<void>;
 
+export const doAuthorizeRedirect = async (
+  path: string,
+  req: LocalRequest,
+  res: LocalResponse,
+) => {
+  const { baseUrl } = forwardedFor(req);
+  const redirectUri = `${baseUrl}/oauth2/callback`;
+  const stateKey = v4();
+  const nonce = v4();
+  await Promise.all([
+    setRedisVal(
+      `authState:${stateKey}`,
+      JSON.stringify({
+        redirectUri: `${baseUrl}${path}`,
+        nonce,
+      }),
+    ),
+    setRedisVal(`nonce:${nonce}`, stateKey),
+  ]);
+
+  // build authorization url
+  const authorizeUrl = `${config.get('oauth2:authorizeUrl')}?response_type=code&client_id=${encodeURIComponent(
+    config.get('oauth2:clientId'),
+  )}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(
+    config.get('oauth2:scopes'),
+  )}&nonce=${encodeURIComponent(nonce)}&state=${encodeURIComponent(stateKey)}`;
+  log.debug(
+    `Sending authorization request for ${req.url}: url=${authorizeUrl}`,
+  );
+  return res.redirect(authorizeUrl);
+};
+
 const DEFAULT_ERROR_HANDLER =
   (statusCode: number): ERROR_HANDLER_TYPE =>
   (inErr, _inReq, inRes) => {
@@ -150,27 +183,35 @@ export const authorizeMiddleware = <
   router.get(
     '/oauth2/callback',
     async (req: LocalRequest, res: LocalResponse, next: LocalNextFunction) => {
-      const { code, state, error } = req.query as {
+      const {
+        code,
+        state: stateKey,
+        error,
+      } = req.query as {
         code?: string;
         state: string;
         error?: string;
       };
       const { baseUrl } = forwardedFor(req);
       log.debug(
-        `Authorization callback: code=${code} state=${state} error=${error}`,
+        `Authorization callback: code=${code} state=${stateKey} error=${error}`,
       );
-      if (error) {
-        return callbackErrorHandler(new Error(error), req, res, next);
-      }
-      if (!code) {
-        return callbackErrorHandler(
-          new Error('No code supplied'),
-          req,
-          res,
-          next,
-        );
-      }
       try {
+        if (error) {
+          throw new Error(error);
+        }
+        if (!code) {
+          throw new Error('No code supplied');
+        }
+        const stateJson = await getRedisVal(`authState:${stateKey}`);
+        if (!stateJson) {
+          throw new Error(`No state found: key=${stateKey}`);
+        }
+        const { redirectUri, nonce } = JSON.parse(stateJson) as {
+          redirectUri: string;
+          nonce: string;
+        };
+
         const tokenResp = await doTokenExchange(
           code,
           `${baseUrl}/oauth2/callback`,
@@ -178,6 +219,20 @@ export const authorizeMiddleware = <
         if (!tokenResp?.access_token) {
           throw new Error(`No access token in response`);
         }
+
+        const nonceState = await getRedisVal(`nonce:${nonce}`);
+        await delRedisVal(`nonce:${nonce}`);
+
+        if (tokenResp.nonce) {
+          if (tokenResp.nonce !== nonce) {
+            throw new Error(`Supplied nonce value doesn't match`);
+          } else if (!nonceState) {
+            throw new Error(`Supplied nonce value already consumed`);
+          } else if (nonceState !== stateKey) {
+            throw new Error(`Supplied nonce value doesn't match state`);
+          }
+        }
+
         const dlProfile = await getOauthProfileByToken(tokenResp?.access_token);
 
         let userId;
@@ -213,7 +268,7 @@ export const authorizeMiddleware = <
         };
 
         // validate state, get redirectUrl
-        const origUrl = (await getRedisVal(state)) || '/';
+        const origUrl = redirectUri || '/';
         log.debug(`Redirecting to ${origUrl}`);
         return res.redirect(origUrl);
       } catch (err: any) {
@@ -224,7 +279,6 @@ export const authorizeMiddleware = <
 
   router.use(
     async (req: LocalRequest, res: LocalResponse, next: LocalNextFunction) => {
-      const { baseUrl } = forwardedFor(req);
       req.getLoggedInUserId = (): string | null => {
         const user = req.session?.user;
         return user?.userId || null;
@@ -265,20 +319,7 @@ export const authorizeMiddleware = <
         log.debug(`Authentication check passed: ${req.url}`);
         return next();
       }
-      const redirectUri = `${baseUrl}/oauth2/callback`;
-      const stateKey = v4();
-      await setRedisVal(stateKey, `${baseUrl}${req.url}`);
-      const authorizeUrl = `${config.get('oauth2:authorizeUrl')}?response_type=code&client_id=${encodeURIComponent(
-        config.get('oauth2:clientId'),
-      )}&redirect_uri=${encodeURIComponent(
-        redirectUri,
-      )}&scope=${encodeURIComponent(
-        config.get('oauth2:scopes'),
-      )}&state=${encodeURIComponent(stateKey)}`;
-      log.debug(
-        `Unauthenticated request to ${req.url} ... authorizing at ${authorizeUrl}`,
-      );
-      return res.redirect(authorizeUrl);
+      return doAuthorizeRedirect(req.url, req, res);
     },
   );
   return router;
