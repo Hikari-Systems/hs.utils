@@ -312,7 +312,8 @@ export const authorizeMiddleware = <
           log.debug(`Auth: rejecting, not logged in on failfast path ${path}`);
           return res.status(401).send(`not logged in`);
         }
-        return doAuthorizeRedirect(req.url, req, res);
+        log.debug(`Authentication check passed (failfast): ${path}`);
+        return next();
       }
       if (userId) {
         log.debug(`Authentication check passed: ${path}`);
@@ -324,6 +325,9 @@ export const authorizeMiddleware = <
   return router;
 };
 
+/*
+ * aim to keep the getLoggedInUser function returning the logged in user even if whitelisted
+ */
 export const bearerMiddleware =
   <T extends UserBaseType>(
     pathConfigs: Oauth2PathConfig[],
