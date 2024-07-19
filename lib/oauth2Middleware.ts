@@ -368,12 +368,12 @@ export const bearerMiddleware =
             `No email in downloaded profile: ${JSON.stringify(dlProfile)}`,
           );
         }
-        const user = await getUserByEmail(dlProfile.email);
-        if (!user) {
+        const dlUser = await getUserByEmail(dlProfile.email);
+        if (!dlUser) {
           throw new Error(`No user found for email ${dlProfile.email}`);
         }
-        log.debug(`Token valid. Found user id=${user?.id}`);
-        return user;
+        log.debug(`Token valid. Found user id=${dlUser?.id}`);
+        return dlUser;
       })();
 
       req.getLoggedInUserId = (): string | null => user?.id || null;
