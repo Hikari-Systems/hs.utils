@@ -159,10 +159,17 @@ const DEFAULT_ERROR_HANDLER =
     return Promise.resolve();
   };
 
+export interface PathConfig {
+  regex: RegExp;
+  whitelist: boolean;
+  failFast: boolean;
+}
+
 export const authorizeMiddleware = <
   T extends UserBaseType,
   U extends OauthProfileType,
 >(
+  pathConfigs: PathConfig[],
   getUserByEmail: GetUserByEmailFunction<T>,
   addUserByEmail: AddUserByEmailFunction<T>,
   getOauthProfileBySub: GetOauthProfileBySubFunction<U>,
@@ -253,12 +260,18 @@ export const authorizeMiddleware = <
 
   router.use(
     async (req: LocalRequest, res: LocalResponse, next: LocalNextFunction) => {
+      const matchedPath = pathConfigs?.find((x) => x.regex.test(req.path));
+      if (!matchedPath) {
+        return next(
+          new Error(`ERROR: No matching auth path config found at ${req.path}`),
+        );
+      }
       req.getLoggedInUserId = (): string | null => {
-        const user = req.session?.user;
+        const user = req?.session?.user;
         return user?.userId || null;
       };
       req.getAccessToken = async (): Promise<string | null> => {
-        const user = req.session?.user;
+        const user = req?.session?.user;
         if (!user) {
           return null;
         }
@@ -276,7 +289,7 @@ export const authorizeMiddleware = <
                 ? dayjs().add(tokenResp.expires_in, 'second')
                 : null,
             };
-            return tokenResp.access_token;
+            return tokenResp.access_token || null;
           }
           req.session.user = {
             userId: user.userId,
@@ -286,11 +299,24 @@ export const authorizeMiddleware = <
           };
           return null;
         }
-        return user.accessToken;
+        return user.accessToken || null;
       };
-
-      if (req.getLoggedInUserId()) {
-        log.debug(`Authentication check passed: ${req.url}`);
+      if (matchedPath.whitelist) {
+        log.debug(`Auth: allowing whitelisted path ${req.path}`);
+        return next();
+      }
+      const userId = req.getLoggedInUserId();
+      if (matchedPath?.failFast) {
+        if (!userId) {
+          log.debug(
+            `Auth: rejecting, not logged in on failfast path ${req.path}`,
+          );
+          return res.status(401).send(`not logged in`);
+        }
+        return doAuthorizeRedirect(req.url, req, res);
+      }
+      if (userId) {
+        log.debug(`Authentication check passed: ${req.path}`);
         return next();
       }
       return doAuthorizeRedirect(req.url, req, res);
@@ -301,42 +327,58 @@ export const authorizeMiddleware = <
 
 export const bearerMiddleware =
   <T extends UserBaseType>(
+    pathConfigs: PathConfig[],
     getUserByEmail: GetUserByEmailFunction<T>,
     authErrorHandler = DEFAULT_ERROR_HANDLER(401),
   ) =>
   async (req: LocalRequest, res: LocalResponse, next: LocalNextFunction) => {
-    const authHeader = req.headers?.authorization?.trim();
-    if (!authHeader?.toLowerCase().startsWith('bearer ')) {
-      return authErrorHandler(
-        new Error(`No authorization header`),
-        req,
-        res,
-        next,
+    const matchedPath = pathConfigs?.find((x) => x.regex.test(req.path));
+    if (!matchedPath) {
+      return next(
+        new Error(`ERROR: No matching auth path config found at ${req.path}`),
       );
     }
-    const token = authHeader.substring(7).trim();
-    if (token === '') {
+    const { whitelist: whitelisted } = matchedPath;
+
+    const token = (() => {
+      const authHeader = req.headers?.authorization?.trim();
+      if (authHeader?.toLowerCase().startsWith('bearer ')) {
+        return (authHeader || 'bearer ').substring(7).trim();
+      }
+      return '';
+    })();
+
+    if (!whitelisted && token === '') {
       return authErrorHandler(
-        new Error(`No access token supplied`),
+        new Error(`No bearer/access token supplied`),
         req,
         res,
         next,
       );
     }
     try {
-      // Passing token to back end oauth-provider
-      const dlProfile = await getOauthProfileByToken(token);
-      if (!dlProfile?.email) {
-        throw new Error(`No email in dlProfile: ${JSON.stringify(dlProfile)}`);
-      }
-      const user = await getUserByEmail(dlProfile.email);
-      if (!user) {
-        throw new Error(`No user found for email ${dlProfile.email}`);
-      }
-      log.debug(`Token valid. Found user id=${user?.id}`);
+      const user: T | null = await (async () => {
+        if ((token || '') === '') {
+          return null; // must be whitelisted and not logged in
+        }
+        // Passing token to back end oauth-provider
+        const dlProfile = await getOauthProfileByToken(token);
+        if (!dlProfile?.email) {
+          throw new Error(
+            `No email in downloaded profile: ${JSON.stringify(dlProfile)}`,
+          );
+        }
+        const user = await getUserByEmail(dlProfile.email);
+        if (!user) {
+          throw new Error(`No user found for email ${dlProfile.email}`);
+        }
+        log.debug(`Token valid. Found user id=${user?.id}`);
+        return user;
+      })();
 
       req.getLoggedInUserId = (): string | null => user?.id || null;
-      req.getAccessToken = async (): Promise<string | null> => token;
+      req.getAccessToken = async (): Promise<string | null> =>
+        token === '' ? null : token;
       return next();
     } catch (err: any) {
       return authErrorHandler(err, req, res, next);
