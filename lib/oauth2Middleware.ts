@@ -137,24 +137,14 @@ export const doAuthorizeRedirect = async (
   const { baseUrl } = forwardedFor(req);
   const redirectUri = `${baseUrl}/oauth2/callback`;
   const stateKey = v4();
-  const nonce = v4();
-  await Promise.all([
-    setRedisVal(
-      `authState:${stateKey}`,
-      JSON.stringify({
-        redirectUri: `${baseUrl}${path}`,
-        nonce,
-      }),
-    ),
-    setRedisVal(`nonce:${nonce}`, stateKey),
-  ]);
+  await setRedisVal(`authState:${stateKey}`, `${baseUrl}${path}`);
 
   // build authorization url
   const authorizeUrl = `${config.get('oauth2:authorizeUrl')}?response_type=code&client_id=${encodeURIComponent(
     config.get('oauth2:clientId'),
   )}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(
     config.get('oauth2:scopes'),
-  )}&nonce=${encodeURIComponent(nonce)}&state=${encodeURIComponent(stateKey)}`;
+  )}&state=${encodeURIComponent(stateKey)}`;
   log.debug(
     `Sending authorization request for ${req.url}: url=${authorizeUrl}`,
   );
@@ -203,14 +193,10 @@ export const authorizeMiddleware = <
         if (!code) {
           throw new Error('No code supplied');
         }
-        const stateJson = await getRedisVal(`authState:${stateKey}`);
-        if (!stateJson) {
+        const redirectUri = await getRedisVal(`authState:${stateKey}`);
+        if (!redirectUri) {
           throw new Error(`No state found: key=${stateKey}`);
         }
-        const { redirectUri, nonce } = JSON.parse(stateJson) as {
-          redirectUri: string;
-          nonce: string;
-        };
 
         const tokenResp = await doTokenExchange(
           code,
@@ -219,19 +205,7 @@ export const authorizeMiddleware = <
         if (!tokenResp?.access_token) {
           throw new Error(`No access token in response`);
         }
-
-        const nonceState = await getRedisVal(`nonce:${nonce}`);
-        await delRedisVal(`nonce:${nonce}`);
-
-        if (tokenResp.nonce) {
-          if (tokenResp.nonce !== nonce) {
-            throw new Error(`Supplied nonce value doesn't match`);
-          } else if (!nonceState) {
-            throw new Error(`Supplied nonce value already consumed`);
-          } else if (nonceState !== stateKey) {
-            throw new Error(`Supplied nonce value doesn't match state`);
-          }
-        }
+        await delRedisVal(`authState:${stateKey}`);
 
         const dlProfile = await getOauthProfileByToken(tokenResp?.access_token);
 
