@@ -99,37 +99,6 @@ const getOauthProfileByToken = async (token: string): Promise<OauthProfile> => {
   }
 };
 
-const doUserRowCreation = async <
-  T extends UserBaseType,
-  U extends OauthProfileType,
->(
-  dlProfile: OauthProfile,
-  getUserByEmail: GetUserByEmailFunction<T>,
-  addUserByEmail: AddUserByEmailFunction<T>,
-  getOauthProfileBySub: GetOauthProfileBySubFunction<U>,
-  upsertOauthProfile: UpsertOauthProfileFunction<U>,
-) => {
-  let userId;
-  if (!dlProfile.email) {
-    const savedProfile = await getOauthProfileBySub(dlProfile.sub);
-    if (!savedProfile) {
-      const user = await addUserByEmail('', dlProfile);
-      userId = user.id;
-    } else {
-      userId = savedProfile.userId;
-    }
-  } else {
-    let user = await getUserByEmail(dlProfile.email);
-    if (!user) {
-      user = await addUserByEmail(dlProfile.email, dlProfile);
-    }
-    userId = user.id;
-  }
-
-  await upsertOauthProfile(dlProfile.sub, userId, JSON.stringify(dlProfile));
-  return userId;
-};
-
 // ////////////////////////////
 
 export type GetUserByEmailFunction<T> = (email: string) => Promise<T | null>;
@@ -162,6 +131,39 @@ type ERROR_HANDLER_TYPE = (
   res: LocalResponse,
   next: LocalNextFunction,
 ) => Promise<void>;
+
+const doUserRowCreation = async <
+  T extends UserBaseType,
+  U extends OauthProfileType,
+>(
+  dlProfile: OauthProfile,
+  getUserByEmail: GetUserByEmailFunction<T>,
+  addUserByEmail: AddUserByEmailFunction<T>,
+  getOauthProfileBySub: GetOauthProfileBySubFunction<U>,
+  upsertOauthProfile: UpsertOauthProfileFunction<U>,
+) => {
+  let userId;
+  if (!dlProfile.email) {
+    const savedProfile = await getOauthProfileBySub(dlProfile.sub);
+    if (!savedProfile) {
+      const user = await addUserByEmail('', dlProfile);
+      userId = user.id;
+    } else {
+      userId = savedProfile.userId;
+    }
+  } else {
+    let user = await getUserByEmail(dlProfile.email);
+    if (!user) {
+      user = await addUserByEmail(dlProfile.email, dlProfile);
+    }
+    userId = user.id;
+  }
+
+  await upsertOauthProfile(dlProfile.sub, userId, JSON.stringify(dlProfile));
+  return userId;
+};
+
+// ////////////////////////////
 
 export const doAuthorizeRedirect = async (
   path: string,
@@ -389,14 +391,14 @@ export const bearerMiddleware =
         }
         // Passing token to back end oauth-provider
         const dlProfile = await getOauthProfileByToken(token);
-        const userId = await doUserRowCreation(
+        const dlUserId = await doUserRowCreation(
           dlProfile,
           getUserByEmail,
           addUserByEmail,
           getOauthProfileBySub,
           upsertOauthProfile,
         );
-        return userId;
+        return dlUserId;
       })();
 
       req.getLoggedInUserId = (): string | null => userId || null;
