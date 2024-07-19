@@ -103,22 +103,23 @@ const getOauthProfileByToken = async (
 
 // ////////////////////////////
 
-export type GetUserByEmailFunction<T> = (email: string) => Promise<T | null>;
-export type AddUserByEmailFunction<T> = (
+export type GetUserByEmailFunction<U> = (
+  email: string,
+) => Promise<(U & { id: string }) | null>;
+export type AddUserByEmailFunction<U> = (
   email: string,
   profile: OauthProfileResponse,
-) => Promise<T>;
-export type GetOauthProfileBySubFunction<U> = (
+) => Promise<U & { id: string }>;
+export type GetOauthProfileBySubFunction<O> = (
   sub: string,
-) => Promise<U | null>;
-export type UpsertOauthProfileFunction<U> = (
+) => Promise<O | null>;
+export type UpsertOauthProfileFunction<O> = (
   sub: string,
   userId: string,
   profileJson: string,
-) => Promise<U>;
+) => Promise<O>;
 
 export interface UserBaseType {
-  id: string;
   email: string;
 }
 export interface OauthProfileType {
@@ -135,14 +136,14 @@ type ERROR_HANDLER_TYPE = (
 ) => Promise<void>;
 
 const doUserRowCreation = async <
-  T extends UserBaseType,
-  U extends OauthProfileType,
+  U extends UserBaseType,
+  O extends OauthProfileType,
 >(
   dlProfile: OauthProfileResponse,
-  getUserByEmail: GetUserByEmailFunction<T>,
-  addUserByEmail: AddUserByEmailFunction<T>,
-  getOauthProfileBySub: GetOauthProfileBySubFunction<U>,
-  upsertOauthProfile: UpsertOauthProfileFunction<U>,
+  getUserByEmail: GetUserByEmailFunction<U>,
+  addUserByEmail: AddUserByEmailFunction<U>,
+  getOauthProfileBySub: GetOauthProfileBySubFunction<O>,
+  upsertOauthProfile: UpsertOauthProfileFunction<O>,
 ) => {
   let userId;
   if (!dlProfile.email) {
