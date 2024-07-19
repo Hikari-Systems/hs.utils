@@ -20,7 +20,7 @@ type TokenResponse = {
   nonce?: string;
 };
 
-type OauthProfile = {
+export type OauthProfileResponse = {
   sub: string;
   given_name?: string;
   family_name?: string;
@@ -82,7 +82,9 @@ const doTokenRefresh = async (refreshToken: string): Promise<TokenResponse> => {
   }
 };
 
-const getOauthProfileByToken = async (token: string): Promise<OauthProfile> => {
+const getOauthProfileByToken = async (
+  token: string,
+): Promise<OauthProfileResponse> => {
   try {
     const response = await fetch(config.get('oauth2:profileUrl'), {
       headers: {
@@ -92,7 +94,7 @@ const getOauthProfileByToken = async (token: string): Promise<OauthProfile> => {
     });
     const profileResponse = await response.text();
     log.debug(`Profile is ${profileResponse}`);
-    return JSON.parse(profileResponse) as OauthProfile;
+    return JSON.parse(profileResponse) as OauthProfileResponse;
   } catch (err) {
     log.error(`Error doing profile download: ${token}`, err);
     throw err;
@@ -104,7 +106,7 @@ const getOauthProfileByToken = async (token: string): Promise<OauthProfile> => {
 export type GetUserByEmailFunction<T> = (email: string) => Promise<T | null>;
 export type AddUserByEmailFunction<T> = (
   email: string,
-  profile: OauthProfile,
+  profile: OauthProfileResponse,
 ) => Promise<T>;
 export type GetOauthProfileBySubFunction<U> = (
   sub: string,
@@ -136,7 +138,7 @@ const doUserRowCreation = async <
   T extends UserBaseType,
   U extends OauthProfileType,
 >(
-  dlProfile: OauthProfile,
+  dlProfile: OauthProfileResponse,
   getUserByEmail: GetUserByEmailFunction<T>,
   addUserByEmail: AddUserByEmailFunction<T>,
   getOauthProfileBySub: GetOauthProfileBySubFunction<U>,

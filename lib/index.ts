@@ -5,6 +5,9 @@ export {
   authorizeMiddleware,
   bearerMiddleware,
   type Oauth2PathConfig,
+  type OauthProfileResponse,
+  type OauthProfileType,
+  type UserBaseType,
 } from './oauth2Middleware';
 export { healthcheck as redisHealthcheck } from './redis';
 export { forwardedFor } from './forwardedFor';
