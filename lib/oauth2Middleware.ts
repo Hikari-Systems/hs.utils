@@ -99,10 +99,44 @@ const getOauthProfileByToken = async (token: string): Promise<OauthProfile> => {
   }
 };
 
+const doUserRowCreation = async <
+  T extends UserBaseType,
+  U extends OauthProfileType,
+>(
+  dlProfile: OauthProfile,
+  getUserByEmail: GetUserByEmailFunction<T>,
+  addUserByEmail: AddUserByEmailFunction<T>,
+  getOauthProfileBySub: GetOauthProfileBySubFunction<U>,
+  upsertOauthProfile: UpsertOauthProfileFunction<U>,
+) => {
+  let userId;
+  if (!dlProfile.email) {
+    const savedProfile = await getOauthProfileBySub(dlProfile.sub);
+    if (!savedProfile) {
+      const user = await addUserByEmail('', dlProfile);
+      userId = user.id;
+    } else {
+      userId = savedProfile.userId;
+    }
+  } else {
+    let user = await getUserByEmail(dlProfile.email);
+    if (!user) {
+      user = await addUserByEmail(dlProfile.email, dlProfile);
+    }
+    userId = user.id;
+  }
+
+  await upsertOauthProfile(dlProfile.sub, userId, JSON.stringify(dlProfile));
+  return userId;
+};
+
 // ////////////////////////////
 
 export type GetUserByEmailFunction<T> = (email: string) => Promise<T | null>;
-export type AddUserByEmailFunction<T> = (email: string) => Promise<T>;
+export type AddUserByEmailFunction<T> = (
+  email: string,
+  profile: OauthProfile,
+) => Promise<T>;
 export type GetOauthProfileBySubFunction<U> = (
   sub: string,
 ) => Promise<U | null>;
@@ -216,27 +250,12 @@ export const authorizeMiddleware = <
 
         const dlProfile = await getOauthProfileByToken(tokenResp?.access_token);
 
-        let userId;
-        if (!dlProfile.email) {
-          const savedProfile = await getOauthProfileBySub(dlProfile.sub);
-          if (!savedProfile) {
-            const user = await addUserByEmail('');
-            userId = user.id;
-          } else {
-            userId = savedProfile.userId;
-          }
-        } else {
-          let user = await getUserByEmail(dlProfile.email);
-          if (!user) {
-            user = await addUserByEmail(dlProfile.email);
-          }
-          userId = user.id;
-        }
-
-        await upsertOauthProfile(
-          dlProfile.sub,
-          userId,
-          JSON.stringify(dlProfile),
+        const userId = await doUserRowCreation(
+          dlProfile,
+          getUserByEmail,
+          addUserByEmail,
+          getOauthProfileBySub,
+          upsertOauthProfile,
         );
 
         req.session.user = {
@@ -329,9 +348,12 @@ export const authorizeMiddleware = <
  * aim to keep the getLoggedInUser function returning the logged in user even if whitelisted
  */
 export const bearerMiddleware =
-  <T extends UserBaseType>(
+  <T extends UserBaseType, U extends OauthProfileType>(
     pathConfigs: Oauth2PathConfig[],
     getUserByEmail: GetUserByEmailFunction<T>,
+    addUserByEmail: AddUserByEmailFunction<T>,
+    getOauthProfileBySub: GetOauthProfileBySubFunction<U>,
+    upsertOauthProfile: UpsertOauthProfileFunction<U>,
     authErrorHandler = DEFAULT_ERROR_HANDLER(401),
   ) =>
   async (req: LocalRequest, res: LocalResponse, next: LocalNextFunction) => {
@@ -361,26 +383,23 @@ export const bearerMiddleware =
       );
     }
     try {
-      const user: T | null = await (async () => {
+      const userId: string | null = await (async () => {
         if ((token || '') === '') {
           return null; // must be whitelisted and not logged in
         }
         // Passing token to back end oauth-provider
         const dlProfile = await getOauthProfileByToken(token);
-        if (!dlProfile?.email) {
-          throw new Error(
-            `No email in downloaded profile: ${JSON.stringify(dlProfile)}`,
-          );
-        }
-        const dlUser = await getUserByEmail(dlProfile.email);
-        if (!dlUser) {
-          throw new Error(`No user found for email ${dlProfile.email}`);
-        }
-        log.debug(`Token valid. Found user id=${dlUser?.id}`);
-        return dlUser;
+        const userId = await doUserRowCreation(
+          dlProfile,
+          getUserByEmail,
+          addUserByEmail,
+          getOauthProfileBySub,
+          upsertOauthProfile,
+        );
+        return userId;
       })();
 
-      req.getLoggedInUserId = (): string | null => user?.id || null;
+      req.getLoggedInUserId = (): string | null => userId || null;
       req.getAccessToken = async (): Promise<string | null> =>
         token === '' ? null : token;
       return next();
