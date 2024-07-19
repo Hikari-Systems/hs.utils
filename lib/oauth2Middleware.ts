@@ -261,10 +261,10 @@ export const authorizeMiddleware = <
   router.use(
     async (req: LocalRequest, res: LocalResponse, next: LocalNextFunction) => {
       const path = req.baseUrl + req.path;
-      const matchedPath = pathConfigs?.find((x) => x.regex.test(req.path));
+      const matchedPath = pathConfigs?.find((x) => x.regex.test(path));
       if (!matchedPath) {
         return next(
-          new Error(`ERROR: No matching auth path config found at ${req.path}`),
+          new Error(`ERROR: No matching auth path config found at ${path}`),
         );
       }
       req.getLoggedInUserId = (): string | null => {
@@ -303,21 +303,19 @@ export const authorizeMiddleware = <
         return user.accessToken || null;
       };
       if (matchedPath.whitelist) {
-        log.debug(`Auth: allowing whitelisted path ${req.path}`);
+        log.debug(`Auth: allowing whitelisted path ${path}`);
         return next();
       }
       const userId = req.getLoggedInUserId();
       if (matchedPath?.failFast) {
         if (!userId) {
-          log.debug(
-            `Auth: rejecting, not logged in on failfast path ${req.path}`,
-          );
+          log.debug(`Auth: rejecting, not logged in on failfast path ${path}`);
           return res.status(401).send(`not logged in`);
         }
         return doAuthorizeRedirect(req.url, req, res);
       }
       if (userId) {
-        log.debug(`Authentication check passed: ${req.path}`);
+        log.debug(`Authentication check passed: ${path}`);
         return next();
       }
       return doAuthorizeRedirect(req.url, req, res);
@@ -333,10 +331,11 @@ export const bearerMiddleware =
     authErrorHandler = DEFAULT_ERROR_HANDLER(401),
   ) =>
   async (req: LocalRequest, res: LocalResponse, next: LocalNextFunction) => {
-    const matchedPath = pathConfigs?.find((x) => x.regex.test(req.path));
+    const path = req.baseUrl + req.path;
+    const matchedPath = pathConfigs?.find((x) => x.regex.test(path));
     if (!matchedPath) {
       return next(
-        new Error(`ERROR: No matching auth path config found at ${req.path}`),
+        new Error(`ERROR: No matching auth path config found at ${path}`),
       );
     }
     const { whitelist: whitelisted } = matchedPath;
