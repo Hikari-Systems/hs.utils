@@ -159,7 +159,7 @@ const DEFAULT_ERROR_HANDLER =
     return Promise.resolve();
   };
 
-export interface PathConfig {
+export interface Oauth2PathConfig {
   regex: RegExp;
   whitelist: boolean;
   failFast: boolean;
@@ -169,7 +169,7 @@ export const authorizeMiddleware = <
   T extends UserBaseType,
   U extends OauthProfileType,
 >(
-  pathConfigs: PathConfig[],
+  pathConfigs: Oauth2PathConfig[],
   getUserByEmail: GetUserByEmailFunction<T>,
   addUserByEmail: AddUserByEmailFunction<T>,
   getOauthProfileBySub: GetOauthProfileBySubFunction<U>,
@@ -327,7 +327,7 @@ export const authorizeMiddleware = <
 
 export const bearerMiddleware =
   <T extends UserBaseType>(
-    pathConfigs: PathConfig[],
+    pathConfigs: Oauth2PathConfig[],
     getUserByEmail: GetUserByEmailFunction<T>,
     authErrorHandler = DEFAULT_ERROR_HANDLER(401),
   ) =>

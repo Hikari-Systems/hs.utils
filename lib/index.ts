@@ -1,7 +1,11 @@
 import config from './config';
 import logging from './logging';
 
-export { authorizeMiddleware, bearerMiddleware } from './oauth2Middleware';
+export {
+  authorizeMiddleware,
+  bearerMiddleware,
+  type Oauth2PathConfig,
+} from './oauth2Middleware';
 export { healthcheck as redisHealthcheck } from './redis';
 export { forwardedFor } from './forwardedFor';
 export { config, logging };
