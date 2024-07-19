@@ -260,6 +260,7 @@ export const authorizeMiddleware = <
 
   router.use(
     async (req: LocalRequest, res: LocalResponse, next: LocalNextFunction) => {
+      const path = req.baseUrl + req.path;
       const matchedPath = pathConfigs?.find((x) => x.regex.test(req.path));
       if (!matchedPath) {
         return next(
