@@ -2,11 +2,11 @@ import express from 'express';
 import dayjs from 'dayjs';
 import { v4 } from 'uuid';
 
-import config from './config';
-import logging from './logging';
-import { delRedisVal, getRedisVal, setRedisVal } from './redis';
-import { LocalNextFunction, LocalRequest, LocalResponse } from './types';
-import { forwardedFor } from './forwardedFor';
+import config from '../config';
+import logging from '../logging';
+import { delRedisVal, getRedisVal, setRedisVal } from '../redis';
+import { LocalNextFunction, LocalRequest, LocalResponse } from '../types';
+import { forwardedFor } from '../forwardedFor';
 
 const log = logging('middleware:authentication');
 

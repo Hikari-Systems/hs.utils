@@ -8,10 +8,11 @@ export {
   type OauthProfileResponse,
   type OauthProfileType,
   type UserBaseType,
-} from './oauth2Middleware';
+} from './middleware/oauth2';
 export { healthcheck as redisHealthcheck } from './redis';
 export { forwardedFor } from './forwardedFor';
-export { timingMiddleware } from './timing';
+export { timingMiddleware } from './middleware/timing';
+export { sessionMiddleware } from './middleware/session';
 export { config, logging };
 
 export * from './types';
