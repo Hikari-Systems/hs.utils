@@ -1,10 +1,13 @@
-import { Request, Response, NextFunction } from 'express';
-
 import logging from './logging';
+import { LocalNextFunction, LocalRequest, LocalResponse } from './types';
 
 const log = logging('server:timing');
 
-export default (req: Request, res: Response, next: NextFunction) => {
+export const timingMiddleware = (
+  req: LocalRequest,
+  res: LocalResponse,
+  next: LocalNextFunction,
+) => {
   const { cookie } = req.headers;
   log.debug(
     `STARTED: ${req.method} ${req.originalUrl} ${cookie ? 'cookie=' : ''}${
