@@ -1,4 +1,4 @@
-import { createClient } from 'redis';
+import { createClient, RedisClientType } from 'redis';
 import config from './config';
 import logging from './logging';
 
@@ -18,27 +18,31 @@ const getClient = () => {
   return null;
 };
 
-const redisConn = await (async () => {
-  const redisClient = getClient();
-  if (!redisClient) {
-    return null;
-  }
-  redisClient.on('ready', () => {
-    log.debug('Session store in redis connected');
-  });
-  redisClient.on('error', (e) => {
-    log.error('Error in redis connection', e);
-  });
-  redisClient.on('reconnecting', () => {
-    log.debug('Session store in redis reconnecting');
-  });
-  redisClient.on('end', () => {
-    log.debug('Session store in redis disconnected');
-  });
-  return redisClient.connect();
-})();
+// hold a promise in module scope, then await the same promise to get the resolved value
+// before using it each time. Assumes these objects are shareable across requests (todo: verify)
+const redisConnPromise: Promise<RedisClientType<any, any, any> | null> =
+  (async () => {
+    const redisClient = getClient();
+    if (!redisClient) {
+      return null;
+    }
+    redisClient.on('ready', () => {
+      log.debug('Session store in redis connected');
+    });
+    redisClient.on('error', (e) => {
+      log.error('Error in redis connection', e);
+    });
+    redisClient.on('reconnecting', () => {
+      log.debug('Session store in redis reconnecting');
+    });
+    redisClient.on('end', () => {
+      log.debug('Session store in redis disconnected');
+    });
+    return redisClient.connect();
+  })();
 
 export const getRedisVal = async (key: string): Promise<string | null> => {
+  const redisConn = await redisConnPromise;
   if (!redisConn) {
     return null;
   }
@@ -54,6 +58,7 @@ export const setRedisVal = async (
   key: string,
   value: string,
 ): Promise<void> => {
+  const redisConn = await redisConnPromise;
   if (!redisConn) {
     return;
   }
@@ -66,6 +71,7 @@ export const setRedisVal = async (
 };
 
 export const delRedisVal = async (key: string): Promise<void> => {
+  const redisConn = await redisConnPromise;
   if (!redisConn) {
     return;
   }
