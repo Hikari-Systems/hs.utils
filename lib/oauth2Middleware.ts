@@ -327,7 +327,7 @@ export const authorizeMiddleware = <
         return user.accessToken || null;
       };
       if (matchedPath.whitelist) {
-        log.debug(`Auth: allowing whitelisted path ${path}`);
+        // log.debug(`Auth: allowing whitelisted path ${path}`);
         return next();
       }
       const userId = req.getLoggedInUserId();
@@ -336,11 +336,11 @@ export const authorizeMiddleware = <
           log.debug(`Auth: rejecting, not logged in on failfast path ${path}`);
           return res.status(401).send(`not logged in`);
         }
-        log.debug(`Authentication check passed (failfast): ${path}`);
+        // log.debug(`Authentication check passed (failfast): ${path}`);
         return next();
       }
       if (userId) {
-        log.debug(`Authentication check passed: ${path}`);
+        // log.debug(`Authentication check passed: ${path}`);
         return next();
       }
       return doAuthorizeRedirect(req.url, req, res);
