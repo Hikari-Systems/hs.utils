@@ -27,16 +27,16 @@ const redisConnPromise: Promise<RedisClientType<any, any, any> | null> =
       return null;
     }
     redisClient.on('ready', () => {
-      log.debug('Session store in redis connected');
+      log.debug('General purpose redis connection available');
     });
     redisClient.on('error', (e) => {
-      log.error('Error in redis connection', e);
+      log.error('Error in general purpose redis connection', e);
     });
     redisClient.on('reconnecting', () => {
-      log.debug('Session store in redis reconnecting');
+      log.debug('General purpose redis connection interrupted - reconnecting');
     });
     redisClient.on('end', () => {
-      log.debug('Session store in redis disconnected');
+      log.debug('General purpose redis connection is disconnected');
     });
     return redisClient.connect();
   })();

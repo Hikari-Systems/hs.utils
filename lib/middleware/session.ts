@@ -7,25 +7,45 @@ import { LocalNextFunction, LocalRequest, LocalResponse } from '../types';
 
 const log = logging('middelware:session');
 
-const redisClient = createClient({
-  url: config.get('redis:url'),
-  password: config.get('redis:auth') || undefined,
-});
+const redisEnabled = (config.get('redis:enabled') || 'true') === 'true';
+if (!redisEnabled) {
+  log.warn(
+    'WARNING: Redis disabled in config (sessions using default memory store)',
+  );
+}
 
-redisClient.on('ready', () => {
-  log.debug('Session store in redis connected');
-});
-redisClient.on('error', (e) => {
-  log.error('Error in redis connection', e);
-});
-redisClient.on('reconnecting', () => {
-  log.debug('Session store in redis reconnecting');
-});
-redisClient.on('end', () => {
-  log.debug('Session store in redis disconnected');
-});
-const redisConnPromise: Promise<RedisClientType<any, any, any>> =
-  redisClient.connect();
+const getClient = () => {
+  if (redisEnabled) {
+    return createClient({
+      url: config.get('redis:url'),
+      password: config.get('redis:auth') || undefined,
+    });
+  }
+  return null;
+};
+
+// hold a promise in module scope, then await the same promise to get the resolved value
+// before using it each time. Assumes these objects are shareable across requests (todo: verify)
+const redisConnPromise: Promise<RedisClientType<any, any, any> | null> =
+  (async () => {
+    const redisClient = getClient();
+    if (!redisClient) {
+      return null;
+    }
+    redisClient.on('ready', () => {
+      log.debug('Session store in redis connected');
+    });
+    redisClient.on('error', (e) => {
+      log.error('Error in redis connection', e);
+    });
+    redisClient.on('reconnecting', () => {
+      log.debug('Session store in redis reconnecting');
+    });
+    redisClient.on('end', () => {
+      log.debug('Session store in redis disconnected');
+    });
+    return redisClient.connect();
+  })();
 
 export const sessionMiddleware = async (
   req: LocalRequest,
@@ -33,12 +53,7 @@ export const sessionMiddleware = async (
   next: LocalNextFunction,
 ) => {
   const sameSite = config.get('session:sameSite') || '';
-  const redisConn = await redisConnPromise;
-  return session({
-    store: new RedisStore({
-      client: redisConn,
-      prefix: config.get('session:prefix') || '',
-    }),
+  const baseConfig = {
     secret: config.get('session:secret') || '',
     resave: false,
     saveUninitialized: false,
@@ -48,5 +63,18 @@ export const sessionMiddleware = async (
       secure: config.get('session:secure') === 'true' ? true : undefined,
       signed: config.get('session:signed') === 'true' ? true : undefined,
     },
+  };
+  if (redisEnabled) {
+    const redisConn = await redisConnPromise;
+    return session({
+      ...baseConfig,
+      store: new RedisStore({
+        client: redisConn,
+        prefix: config.get('session:prefix') || '',
+      }),
+    })(req, res, next);
+  }
+  return session({
+    ...baseConfig,
   })(req, res, next);
 };
