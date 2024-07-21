@@ -172,9 +172,10 @@ export const doAuthorizeRedirect = async (
   path: string,
   req: LocalRequest,
   res: LocalResponse,
+  callbackUri = '/oauth2/callback',
 ) => {
   const { baseUrl } = forwardedFor(req);
-  const redirectUri = `${baseUrl}/oauth2/callback`;
+  const redirectUri = `${baseUrl}${callbackUri}`;
   const stateKey = v4();
   await setRedisVal(`authState:${stateKey}`, `${baseUrl}${path}`);
 
@@ -213,8 +214,8 @@ export const authorizeMiddleware = <
   addUserByEmail: AddUserByEmailFunction<T>,
   getOauthProfileBySub: GetOauthProfileBySubFunction<U>,
   upsertOauthProfile: UpsertOauthProfileFunction<U>,
-  callbackUri = '/oauth2/callback',
   callbackErrorHandler = DEFAULT_ERROR_HANDLER(400),
+  callbackUri = '/oauth2/callback',
 ) => {
   const router = express.Router();
   router.get(
@@ -247,7 +248,7 @@ export const authorizeMiddleware = <
 
         const tokenResp = await doTokenExchange(
           code,
-          `${baseUrl}/oauth2/callback`,
+          `${baseUrl}${callbackUri}`,
         );
         if (!tokenResp?.access_token) {
           throw new Error(`No access token in response`);
@@ -344,7 +345,7 @@ export const authorizeMiddleware = <
         // log.debug(`Authentication check passed: ${path}`);
         return next();
       }
-      return doAuthorizeRedirect(req.url, req, res);
+      return doAuthorizeRedirect(req.url, req, res, callbackUri);
     },
   );
   return router;
