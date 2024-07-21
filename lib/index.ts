@@ -5,10 +5,10 @@ export {
   authorizeMiddleware,
   bearerMiddleware,
   DEFAULT_ERROR_HANDLER as OAUTH_DEFAULT_ERROR_HANDLER,
-  type Oauth2PathConfig,
-  type OauthProfileResponse,
-  type OauthProfileType,
-  type UserBaseType,
+  Oauth2PathConfig,
+  OauthProfileResponse,
+  OauthProfileType,
+  UserBaseType,
 } from './middleware/oauth2';
 export { healthcheck as redisHealthcheck } from './redis';
 export { forwardedFor } from './forwardedFor';
