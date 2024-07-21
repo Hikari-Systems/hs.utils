@@ -232,7 +232,7 @@ export const authorizeMiddleware = <
       };
       const { baseUrl } = forwardedFor(req);
       log.debug(
-        `Authorization callback: code=${code} state=${stateKey} error=${error}`,
+        `Authorization callback: code=${code} state=${stateKey}${error ? ' error=' : ''}${error || ''}`,
       );
       try {
         if (error) {

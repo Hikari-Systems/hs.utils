@@ -7,7 +7,7 @@ import { LocalNextFunction, LocalRequest, LocalResponse } from '../types';
 
 const log = logging('middelware:session');
 
-const redisEnabled = (config.get('redis:enabled') || 'true') === 'true';
+const redisEnabled = (config.get('redis:enabled') || 'false') === 'true';
 if (!redisEnabled) {
   log.warn(
     'WARNING: Redis disabled in config (sessions using default memory store)',
