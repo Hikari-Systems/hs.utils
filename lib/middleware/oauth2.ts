@@ -10,7 +10,7 @@ import { forwardedFor } from '../forwardedFor';
 
 const log = logging('middleware:authentication');
 
-type TokenResponse = {
+interface TokenResponse {
   access_token: string;
   refresh_token?: string;
   expires_in: number;
@@ -18,9 +18,9 @@ type TokenResponse = {
   token_type: string;
   id_token: string;
   nonce?: string;
-};
+}
 
-export type OauthProfileResponse = {
+export interface OauthProfileResponse {
   sub: string;
   given_name?: string;
   family_name?: string;
@@ -30,7 +30,7 @@ export type OauthProfileResponse = {
   nickname?: string;
   picture?: string;
   updated_at?: string;
-};
+}
 
 const doTokenExchange = async (
   code: string,
@@ -190,7 +190,7 @@ export const doAuthorizeRedirect = async (
   return res.redirect(authorizeUrl);
 };
 
-const DEFAULT_ERROR_HANDLER =
+export const DEFAULT_ERROR_HANDLER =
   (statusCode: number): ERROR_HANDLER_TYPE =>
   (inErr, _inReq, inRes) => {
     log.error(`Error ${statusCode}: ${inErr}`);
@@ -213,11 +213,12 @@ export const authorizeMiddleware = <
   addUserByEmail: AddUserByEmailFunction<T>,
   getOauthProfileBySub: GetOauthProfileBySubFunction<U>,
   upsertOauthProfile: UpsertOauthProfileFunction<U>,
+  callbackUri = '/oauth2/callback',
   callbackErrorHandler = DEFAULT_ERROR_HANDLER(400),
 ) => {
   const router = express.Router();
   router.get(
-    '/oauth2/callback',
+    callbackUri,
     async (req: LocalRequest, res: LocalResponse, next: LocalNextFunction) => {
       const {
         code,

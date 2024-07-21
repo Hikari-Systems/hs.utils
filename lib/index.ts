@@ -4,6 +4,7 @@ import logging from './logging';
 export {
   authorizeMiddleware,
   bearerMiddleware,
+  DEFAULT_ERROR_HANDLER as OAUTH_DEFAULT_ERROR_HANDLER,
   type Oauth2PathConfig,
   type OauthProfileResponse,
   type OauthProfileType,
