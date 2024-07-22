@@ -55,13 +55,20 @@ export const sessionMiddleware = async (
   const sameSite = config.get('session:sameSite') || '';
   const baseConfig = {
     secret: config.get('session:secret') || '',
-    resave: false,
-    saveUninitialized: false,
+    proxy: (config.get('session:proxy') || 'true') === 'true',
+    resave: (config.get('session:resave') || 'false') === 'true',
+    saveUninitialized:
+      (config.get('session:saveUninitialized') || 'false') === 'true',
     cookie: {
-      httpOnly: config.get('session:httpOnly') === 'true' ? true : undefined,
+      httpOnly:
+        (config.get('session:httpOnly') || 'false') === 'true'
+          ? true
+          : undefined,
       sameSite: sameSite === '' ? undefined : sameSite,
-      secure: config.get('session:secure') === 'true' ? true : undefined,
-      signed: config.get('session:signed') === 'true' ? true : undefined,
+      secure:
+        (config.get('session:secure') || 'false') === 'true' ? true : undefined,
+      signed:
+        (config.get('session:signed') || 'false') === 'true' ? true : undefined,
     },
   };
   if (redisEnabled) {
