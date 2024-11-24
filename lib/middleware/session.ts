@@ -36,7 +36,7 @@ const getSameSite = () => {
 
 type StoreGetter = () => Promise<Store | undefined>;
 
-const sessionMiddleware =
+export const sessionMiddleware =
   (storeGetter: StoreGetter) =>
   async (req: LocalRequest, res: LocalResponse, next: LocalNextFunction) => {
     const baseConfig: session.SessionOptions = {
@@ -58,7 +58,7 @@ const sessionMiddleware =
 // //////// REDIS IMPLEMENTATION - START
 let redisStore: RedisStore | undefined;
 
-const redisGetter: StoreGetter = async () => {
+export const redisStoreGetter: StoreGetter = async () => {
   const url = configString('session:redis:url', '').trim();
   if (url !== '') {
     if (!redisStore) {
@@ -131,7 +131,7 @@ const getConnectionPool = () =>
   });
 
 let pgSessionStore: PGStore | undefined;
-const postgresGetter: StoreGetter = async () => {
+export const postgresStoreGetter: StoreGetter = async () => {
   const host = (config.get('session:db:host') || '').trim();
   if (host !== '') {
     if (!pgSessionStore) {
@@ -151,6 +151,3 @@ const postgresGetter: StoreGetter = async () => {
   return undefined;
 };
 // //////// POSTGRES IMPLEMENTATION - END
-
-export const redisSessionMiddleware = sessionMiddleware(redisGetter);
-export const postgresSessionMiddleware = sessionMiddleware(postgresGetter);
