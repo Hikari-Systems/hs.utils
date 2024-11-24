@@ -1,87 +1,111 @@
-import session from 'express-session';
+import session, { Store } from 'express-session';
 import RedisStore from 'connect-redis';
 import { createClient, RedisClientType } from 'redis';
+
 import config from '../config';
 import logging from '../logging';
 import { LocalNextFunction, LocalRequest, LocalResponse } from '../types';
 
-const log = logging('middelware:session');
+const log = logging('middleware:session');
 
-const redisEnabled = (config.get('redis:enabled') || 'false') === 'true';
-if (!redisEnabled) {
-  log.warn(
-    'WARNING: Redis disabled in config (sessions using default memory store)',
-  );
-}
+type StoreGetter = () => Promise<Store | undefined>;
 
-const getClient = () => {
-  if (redisEnabled) {
-    return createClient({
-      url: config.get('redis:url'),
-      password: config.get('redis:auth') || undefined,
-    });
-  }
-  return null;
-};
-
-// hold a promise in module scope, then await the same promise to get the resolved value
-// before using it each time. Assumes these objects are shareable across requests (todo: verify)
-const redisConnPromise: Promise<RedisClientType<any, any, any> | null> =
-  (async () => {
-    const redisClient = getClient();
-    if (!redisClient) {
-      return null;
-    }
-    redisClient.on('ready', () => {
-      log.debug('Session store in redis connected');
-    });
-    redisClient.on('error', (e) => {
-      log.error('Error in redis connection', e);
-    });
-    redisClient.on('reconnecting', () => {
-      log.debug('Session store in redis reconnecting');
-    });
-    redisClient.on('end', () => {
-      log.debug('Session store in redis disconnected');
-    });
-    return redisClient.connect();
-  })();
-
-export const sessionMiddleware = async (
-  req: LocalRequest,
-  res: LocalResponse,
-  next: LocalNextFunction,
-) => {
-  const sameSite = config.get('session:sameSite') || '';
-  const baseConfig = {
-    secret: config.get('session:secret') || '',
-    proxy: (config.get('session:proxy') || 'true') === 'true',
-    resave: (config.get('session:resave') || 'false') === 'true',
-    saveUninitialized:
-      (config.get('session:saveUninitialized') || 'false') === 'true',
-    cookie: {
-      httpOnly:
-        (config.get('session:httpOnly') || 'false') === 'true'
-          ? true
-          : undefined,
-      sameSite: sameSite === '' ? undefined : sameSite,
-      secure:
-        (config.get('session:secure') || 'false') === 'true' ? true : undefined,
-      signed:
-        (config.get('session:signed') || 'false') === 'true' ? true : undefined,
-    },
+const sessionMiddleware =
+  (storeGetter: StoreGetter) =>
+  async (req: LocalRequest, res: LocalResponse, next: LocalNextFunction) => {
+    const sameSite = config.get('session:sameSite') || '';
+    const baseConfig = {
+      secret: config.get('session:secret') || '',
+      proxy: (config.get('session:proxy') || 'true') === 'true',
+      resave: (config.get('session:resave') || 'false') === 'true',
+      saveUninitialized:
+        (config.get('session:saveUninitialized') || 'false') === 'true',
+      cookie: {
+        httpOnly:
+          (config.get('session:httpOnly') || 'false') === 'true'
+            ? true
+            : undefined,
+        sameSite: sameSite === '' ? undefined : sameSite,
+        secure:
+          (config.get('session:secure') || 'false') === 'true'
+            ? true
+            : undefined,
+        signed:
+          (config.get('session:signed') || 'false') === 'true'
+            ? true
+            : undefined,
+      },
+    };
+    const store = await storeGetter();
+    return session({ ...baseConfig, store })(req, res, next);
   };
-  if (redisEnabled) {
-    const redisConn = await redisConnPromise;
-    return session({
-      ...baseConfig,
-      store: new RedisStore({
+
+// //////// REDIS IMPLEMENTATION - START
+let redisClientPromise: Promise<RedisClientType<any, any, any> | undefined>;
+
+const redisGetter: StoreGetter = async () => {
+  const url = (config.get('session:redis:url') || '').trim();
+  if (url !== '') {
+    if (redisClientPromise === undefined) {
+      redisClientPromise = new Promise<RedisClientType<any, any, any>>(
+        (resolve, reject) => {
+          const redisClient = createClient({
+            url,
+            password: config.get('session:redis:auth') || undefined,
+          });
+          redisClient.on('ready', () => {
+            log.debug('General purpose redis connection available');
+          });
+          redisClient.on('error', (e) => {
+            log.error('Error in general purpose redis connection', e);
+          });
+          redisClient.on('reconnecting', () => {
+            log.debug(
+              'General purpose redis connection interrupted - reconnecting',
+            );
+          });
+          redisClient.on('end', () => {
+            log.debug('General purpose redis connection is disconnected');
+          });
+          redisClient.connect().then(resolve).catch(reject);
+        },
+      );
+    }
+
+    if (redisClientPromise) {
+      const redisConn = await redisClientPromise;
+      return new RedisStore({
         client: redisConn,
         prefix: config.get('session:prefix') || '',
-      }),
-    })(req, res, next);
+      });
+    }
   }
-  return session({
-    ...baseConfig,
-  })(req, res, next);
+  log.warn(
+    'WARNING: Redis session configuration missing: using in memory session store',
+  );
+  return undefined;
 };
+// //////// REDIS IMPLEMENTATION - END
+
+// //////// POSTGRES IMPLEMENTATION - END
+const postgresGetter: StoreGetter = async () => {
+  if (clientPromise) {
+    return new pgSession({
+      pool: pgPool,                // Connection pool
+      tableName: 'user_sessions'   // Use another table-name than the default "session" one
+      // Insert connect-pg-simple options here
+    }),
+    new PgS({
+      client: redisConn,
+      prefix: config.get('session:prefix') || '',
+    });
+  }
+  log.warn(
+    'WARNING: PostgreSQL session configuration missing: using in memory session store',
+  );
+  return undefined;
+};
+// //////// POSTGRES IMPLEMENTATION - END
+
+export const redisSessionMiddleware = sessionMiddleware(redisGetter);
+export const postgresSessionMiddleware = sessionMiddleware(postgresGetter);

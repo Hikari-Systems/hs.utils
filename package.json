@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@types/express-serve-static-core": "^4.19.5",
+    "connect-pg-simple": "^10.0.0",
     "connect-redis": "^7.1.1",
     "dayjs": "^1.11.11",
     "express": "^4.19.2",
