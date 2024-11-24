@@ -2,11 +2,10 @@ import express from 'express';
 import dayjs from 'dayjs';
 import { v4 } from 'uuid';
 
-import config from '../config';
-import logging from '../logging';
-import { delRedisVal, getRedisVal, setRedisVal } from '../redis';
-import { LocalNextFunction, LocalRequest, LocalResponse } from '../types';
-import { forwardedFor } from '../forwardedFor';
+import config from './config';
+import logging from './logging';
+import { LocalNextFunction, LocalRequest, LocalResponse } from './types';
+import { forwardedFor } from './forwardedFor';
 
 const log = logging('middleware:authentication');
 
@@ -167,17 +166,23 @@ const doUserRowCreation = async <
 };
 
 // ////////////////////////////
+export type StateStore = {
+  get: (req: LocalRequest, key: string) => Promise<string>;
+  set: (req: LocalRequest, key: string, val: string) => Promise<void>;
+  del: (req: LocalRequest, key: string) => Promise<void>;
+};
 
 export const doAuthorizeRedirect = async (
   path: string,
   req: LocalRequest,
   res: LocalResponse,
+  stateStore: StateStore,
   callbackUri = '/oauth2/callback',
 ) => {
   const { baseUrl } = forwardedFor(req);
   const redirectUri = `${baseUrl}${callbackUri}`;
   const stateKey = v4();
-  await setRedisVal(`authState:${stateKey}`, `${baseUrl}${path}`);
+  await stateStore.set(req, stateKey, `${baseUrl}${path}`);
 
   // build authorization url
   const authorizeUrl = `${config.get('oauth2:authorizeUrl')}?response_type=code&client_id=${encodeURIComponent(
@@ -199,6 +204,23 @@ export const DEFAULT_ERROR_HANDLER =
     return Promise.resolve();
   };
 
+export const getSessionStateStore = (): StateStore => ({
+  get: async (req: LocalRequest, key: string) =>
+    (req.session.authStates || {})[`authState:${key}`],
+  set: async (req: LocalRequest, key: string, val: string) => {
+    if (!req.session?.authStates) {
+      req.session.authStates = {};
+    }
+    req.session.authStates[`authState:${key}`] = val;
+  },
+  del: async (req: LocalRequest, key: string) => {
+    if (!req.session?.authStates) {
+      req.session.authStates = {};
+    }
+    delete req.session.authStates[`authState:${key}`];
+  },
+});
+
 export interface Oauth2PathConfig {
   regex: RegExp;
   whitelist: boolean;
@@ -214,6 +236,7 @@ export const authorizeMiddleware = <
   addUserByEmail: AddUserByEmailFunction<T>,
   getOauthProfileBySub: GetOauthProfileBySubFunction<U>,
   upsertOauthProfile: UpsertOauthProfileFunction<U>,
+  stateStore = getSessionStateStore(),
   callbackErrorHandler = DEFAULT_ERROR_HANDLER(400),
   callbackUri = '/oauth2/callback',
 ) => {
@@ -241,7 +264,7 @@ export const authorizeMiddleware = <
         if (!code) {
           throw new Error('No code supplied');
         }
-        const redirectUri = await getRedisVal(`authState:${stateKey}`);
+        const redirectUri = await stateStore.get(req, stateKey);
         if (!redirectUri) {
           throw new Error(`No state found: key=${stateKey}`);
         }
@@ -253,7 +276,7 @@ export const authorizeMiddleware = <
         if (!tokenResp?.access_token) {
           throw new Error(`No access token in response`);
         }
-        await delRedisVal(`authState:${stateKey}`);
+        await stateStore.del(req, stateKey);
 
         const dlProfile = await getOauthProfileByToken(tokenResp?.access_token);
 
@@ -345,7 +368,7 @@ export const authorizeMiddleware = <
         // log.debug(`Authentication check passed: ${path}`);
         return next();
       }
-      return doAuthorizeRedirect(req.url, req, res, callbackUri);
+      return doAuthorizeRedirect(req.url, req, res, stateStore, callbackUri);
     },
   );
   return router;

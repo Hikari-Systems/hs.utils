@@ -16,6 +16,7 @@ export interface User {
 declare module 'express-session' {
   export interface SessionData {
     user: User;
+    authStates: Record<string, string>;
   }
 }
 
