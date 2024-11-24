@@ -1,4 +1,4 @@
-import session, { Store } from 'express-session';
+import session, { MemoryStore, Store } from 'express-session';
 import RedisStore from 'connect-redis';
 import connectPgSimple, { PGStore } from 'connect-pg-simple';
 import { createClient } from 'redis';
@@ -52,7 +52,11 @@ export const sessionMiddleware =
       },
     };
     const store = await storeGetter();
-    return session({ ...baseConfig, store })(req, res, next);
+    return session({ ...baseConfig, store: store || new MemoryStore() })(
+      req,
+      res,
+      next,
+    );
   };
 
 // //////// REDIS IMPLEMENTATION - START
