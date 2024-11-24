@@ -166,23 +166,23 @@ const doUserRowCreation = async <
 };
 
 // ////////////////////////////
-export type StateStore = {
-  get: (req: LocalRequest, key: string) => Promise<string>;
-  set: (req: LocalRequest, key: string, val: string) => Promise<void>;
-  del: (req: LocalRequest, key: string) => Promise<void>;
+export type RedirectStore = {
+  get: (req: LocalRequest, stateKey: string) => Promise<string>;
+  set: (req: LocalRequest, stateKey: string, val: string) => Promise<void>;
+  del: (req: LocalRequest, stateKey: string) => Promise<void>;
 };
 
 export const doAuthorizeRedirect = async (
   path: string,
   req: LocalRequest,
   res: LocalResponse,
-  stateStore: StateStore,
+  redirectStore: RedirectStore,
   callbackUri = '/oauth2/callback',
 ) => {
   const { baseUrl } = forwardedFor(req);
   const redirectUri = `${baseUrl}${callbackUri}`;
   const stateKey = v4();
-  await stateStore.set(req, stateKey, `${baseUrl}${path}`);
+  await redirectStore.set(req, stateKey, `${baseUrl}${path}`);
 
   // build authorization url
   const authorizeUrl = `${config.get('oauth2:authorizeUrl')}?response_type=code&client_id=${encodeURIComponent(
@@ -204,20 +204,20 @@ export const DEFAULT_ERROR_HANDLER =
     return Promise.resolve();
   };
 
-export const getSessionStateStore = (): StateStore => ({
-  get: async (req: LocalRequest, key: string) =>
-    (req.session.authStates || {})[`authState:${key}`],
-  set: async (req: LocalRequest, key: string, val: string) => {
-    if (!req.session?.authStates) {
-      req.session.authStates = {};
+export const getSessionRedirectStore = (): RedirectStore => ({
+  get: async (req: LocalRequest, stateKey: string) =>
+    (req.session.postLoginRedirects || {})[stateKey],
+  set: async (req: LocalRequest, stateKey: string, val: string) => {
+    if (!req.session?.postLoginRedirects) {
+      req.session.postLoginRedirects = {};
     }
-    req.session.authStates[`authState:${key}`] = val;
+    req.session.postLoginRedirects[stateKey] = val;
   },
-  del: async (req: LocalRequest, key: string) => {
-    if (!req.session?.authStates) {
-      req.session.authStates = {};
+  del: async (req: LocalRequest, stateKey: string) => {
+    if (!req.session?.postLoginRedirects) {
+      req.session.postLoginRedirects = {};
     }
-    delete req.session.authStates[`authState:${key}`];
+    delete req.session.postLoginRedirects[stateKey];
   },
 });
 
@@ -236,7 +236,7 @@ export const authorizeMiddleware = <
   addUserByEmail: AddUserByEmailFunction<T>,
   getOauthProfileBySub: GetOauthProfileBySubFunction<U>,
   upsertOauthProfile: UpsertOauthProfileFunction<U>,
-  stateStore = getSessionStateStore(),
+  stateStore = getSessionRedirectStore(),
   callbackErrorHandler = DEFAULT_ERROR_HANDLER(400),
   callbackUri = '/oauth2/callback',
 ) => {
