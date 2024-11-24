@@ -35,9 +35,11 @@ const getSameSite = () => {
 };
 
 type StoreGetter = () => Promise<Store | undefined>;
+const memoryStore = new MemoryStore();
+const memoryStoreGetter: StoreGetter = () => Promise.resolve(memoryStore);
 
 export const sessionMiddleware =
-  (storeGetter: StoreGetter) =>
+  (storeGetter: StoreGetter = memoryStoreGetter) =>
   async (req: LocalRequest, res: LocalResponse, next: LocalNextFunction) => {
     const baseConfig: session.SessionOptions = {
       secret: configString('session:secret', ''),
@@ -51,12 +53,8 @@ export const sessionMiddleware =
         signed: configBoolean('session:signed', false) || undefined,
       },
     };
-    const store = await storeGetter();
-    return session({ ...baseConfig, store: store || new MemoryStore() })(
-      req,
-      res,
-      next,
-    );
+    const store = (await storeGetter()) || (await memoryStoreGetter());
+    return session({ ...baseConfig, store })(req, res, next);
   };
 
 // //////// REDIS IMPLEMENTATION - START
