@@ -9,3 +9,5 @@ export {
   delRedisVal,
   healthcheck as redisHealthcheck,
 } from './redis';
+
+export * from './types';

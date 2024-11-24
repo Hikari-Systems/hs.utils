@@ -7,5 +7,5 @@
     "esModuleInterop": true,
     "outDir": "./es5"
   },
-  "include": ["lib/**/*", "./types.d.ts"]
+  "include": ["lib/**/*", "**/types.d.ts"]
 }
