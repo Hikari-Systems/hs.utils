@@ -1,6 +1,6 @@
 import config from '../config';
 import logging from '../logging';
-import { LocalNextFunction, LocalRequest, LocalResponse } from '../types';
+import { LocalNextFunction, LocalRequest, LocalResponse } from './types';
 
 const log = logging('server:timing');
 

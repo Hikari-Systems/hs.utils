@@ -4,18 +4,18 @@ import logging from './logging';
 
 const log = logging('client:redis');
 
-const redisEnabled = (config.get('redis:enabled') || 'true') === 'true';
-if (!redisEnabled) {
-  log.warn('WARNING: Redis disabled in config (all lookups will return null)');
-}
 const getClient = () => {
-  if (redisEnabled) {
-    return createClient({
-      url: config.get('redis:url'),
-      password: config.get('redis:auth') || undefined,
-    });
+  const redisEnabled = (config.get('redis:enabled') || 'true') === 'true';
+  if (!redisEnabled) {
+    log.warn(
+      'WARNING: Redis disabled in config (all lookups will return null)',
+    );
+    return null;
   }
-  return null;
+  return createClient({
+    url: config.get('redis:url'),
+    password: config.get('redis:auth') || undefined,
+  });
 };
 
 // hold a promise in module scope, then await the same promise to get the resolved value
