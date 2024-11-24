@@ -126,14 +126,14 @@ const getConnectionPool = () =>
     host: configString('session:db:host', ''),
     port: configInteger('session:db:port', 5432),
     min: configInteger('session:db:minpool', 0),
-    max: configInteger('session:db:maxpool', 10),
+    max: configInteger('session:db:maxpool', 3),
     ssl: getSslConfig(),
   });
 
 let pgSessionStore: PGStore | undefined;
 const postgresGetter: StoreGetter = async () => {
-  const url = (config.get('session:redis:url') || '').trim();
-  if (url !== '') {
+  const host = (config.get('session:db:host') || '').trim();
+  if (host !== '') {
     if (!pgSessionStore) {
       pgSessionStore = new PGSession({
         pool: getConnectionPool(),

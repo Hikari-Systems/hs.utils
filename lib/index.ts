@@ -11,3 +11,5 @@ export {
 } from './redis';
 
 export * from './types';
+
+export * as middleware from './middleware';
