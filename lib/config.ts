@@ -19,12 +19,12 @@ const get = (key: string) => {
 };
 
 const configBoolean = (key: string, defaultValue = false): boolean =>
-  (config.get(key) || String(defaultValue)).trim() === 'true';
+  (get(key) || String(defaultValue)).trim() === 'true';
 
 const configInteger = (key: string, defaultValue: number): number =>
-  config.get(key) ? parseInt(config.get(key), 10) : defaultValue;
+  get(key) ? parseInt(config.get(key), 10) : defaultValue;
 
 const configString = (key: string, defaultValue = ''): string =>
-  (config.get(key) || defaultValue).trim();
+  (get(key) || defaultValue).trim();
 
 export default { get, configBoolean, configInteger, configString }; // export a wrapped nconf.get()
