@@ -9,7 +9,6 @@ import { ChatOpenAI } from '@langchain/openai';
 // import { ChatTogetherAI } from '@langchain/community/chat_models/togetherai';
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
-// import { createClient } from 'redis';
 import {
   BaseCheckpointSaver,
   MemorySaver,
@@ -17,13 +16,12 @@ import {
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import { DynamicStructuredTool, tool } from '@langchain/core/tools';
 import { z } from 'zod';
-import pg from 'pg';
-import fs from 'fs';
 
 import config from '../config';
 import logging from '../logging';
 import { ToolArgumentDef, ToolDef } from './types';
 import { ChatHSTogetherAI } from './chat-together';
+import { getConnectionPoolFromConfigPrefix } from '../pg/pgconfig';
 
 const log = logging('langchain:stream');
 
@@ -53,22 +51,14 @@ export const convertToLangchainTool = (def: ToolDef): DynamicStructuredTool =>
 const streaming = (config.get('llm:streaming') || 'false') === 'true';
 
 export const getCheckpointSaver = async (): Promise<BaseCheckpointSaver> => {
-  const checkpointerDBUrl = config.get('llm:checkpointer:url') || '';
-  if (checkpointerDBUrl !== '') {
-    const checkpointerDBCacert = config.get('llm:checkpointer:cacert') || '';
+  const checkpointerDBHost = (
+    config.get('llm:checkpointer:db:host') || ''
+  ).trim();
+  if (checkpointerDBHost !== '') {
     log.debug('Using postgres checkpointer');
-    const ssl =
-      checkpointerDBCacert === ''
-        ? undefined
-        : {
-            rejectUnauthorized: true,
-            ca: fs.readFileSync(checkpointerDBCacert).toString(),
-          };
-    const pgPool = new pg.Pool({
-      connectionString: checkpointerDBUrl,
-      ssl,
-    });
-    const checkpointer = new PostgresSaver(pgPool);
+    const checkpointer = new PostgresSaver(
+      getConnectionPoolFromConfigPrefix('llm:checkpointer:db'),
+    );
     await checkpointer.setup();
     return checkpointer;
   }

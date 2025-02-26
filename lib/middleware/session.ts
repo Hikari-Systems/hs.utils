@@ -2,23 +2,15 @@ import session, { MemoryStore, Store } from 'express-session';
 import RedisStore from 'connect-redis';
 import connectPgSimple, { PGStore } from 'connect-pg-simple';
 import { createClient } from 'redis';
-import fs from 'fs';
-import pg from 'pg';
 
 import config from '../config';
 import logging from '../logging';
 import { LocalNextFunction, LocalRequest, LocalResponse } from '../types';
+import { getConnectionPoolFromConfigPrefix } from '../pg/pgconfig';
 
 const log = logging('middleware:session');
 
-const configBoolean = (key: string, defaultValue = false): boolean =>
-  (config.get(key) || String(defaultValue)).trim() === 'true';
-
-const configInteger = (key: string, defaultValue: number): number =>
-  config.get(key) ? parseInt(config.get(key), 10) : defaultValue;
-
-const configString = (key: string, defaultValue = ''): string =>
-  (config.get(key) || defaultValue).trim();
+const { configString, configBoolean } = config;
 
 const getSameSite = () => {
   const sameSiteStr = configString('session:sameSite', '');
@@ -101,44 +93,13 @@ export const redisStoreGetter: StoreGetter = async () => {
 // //////// POSTGRES IMPLEMENTATION - START
 const PGSession = connectPgSimple(session);
 
-const getSslConfig = () => {
-  if (!configBoolean('session:db:ssl:enabled')) {
-    return false;
-  }
-
-  const rejectUnauthorized = configBoolean('session:db:ssl:verify');
-
-  const caCertPath = configString('session:db:ssl:caCertFile');
-  if (caCertPath === '') {
-    return {
-      rejectUnauthorized,
-    };
-  }
-  return {
-    rejectUnauthorized,
-    ca: fs.readFileSync(caCertPath),
-  };
-};
-
-const getConnectionPool = () =>
-  new pg.Pool({
-    user: configString('session:db:username', ''),
-    password: configString('session:db:password', ''),
-    database: configString('session:db:database', 'hs_session'),
-    host: configString('session:db:host', ''),
-    port: configInteger('session:db:port', 5432),
-    min: configInteger('session:db:minpool', 0),
-    max: configInteger('session:db:maxpool', 3),
-    ssl: getSslConfig(),
-  });
-
 let pgSessionStore: PGStore | undefined;
 export const postgresStoreGetter: StoreGetter = async () => {
   const host = (config.get('session:db:host') || '').trim();
   if (host !== '') {
     if (!pgSessionStore) {
       pgSessionStore = new PGSession({
-        pool: getConnectionPool(),
+        pool: getConnectionPoolFromConfigPrefix('session:db'),
         tableName: config.get('session:db:tableName') || 'session',
       });
     }
