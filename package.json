@@ -2,7 +2,7 @@
   "name": "@hikari-systems/hs.utils",
   "version": "0.0.42",
   "description": "General tools for use in Hikari Systems apps",
-  "main": "es5/index.js",
+  "main": "es2021/index.js",
   "author": "Rick Knowles <rick.knowles@hikari-systems.com>",
   "license": "SEE LICENSE IN LICENSE.md",
   "scripts": {
@@ -10,10 +10,10 @@
     "test": "jest",
     "lint": "eslint ./lib",
     "checkTypes": "tsc --noEmit",
-    "build": "rm -rf ./es5 && tsc --declaration && npm run copy-dts",
+    "build": "rm -rf ./es2021 && tsc --declaration && npm run copy-dts",
     "test-ci": "npm run prepare && npm test",
     "format": "npx prettier --write --ignore-unknown \"**/*.*[t|j]s\"",
-    "copy-dts": "cp ./lib/*.d.ts es5 && touch es5/types.js"
+    "copy-dts": "cp ./lib/*.d.ts es2021 && touch es2021/types.js"
   },
   "dependencies": {
     "@langchain/aws": "^0.1.4",
@@ -71,7 +71,7 @@
     "hikari",
     "utilities"
   ],
-  "types": "./es5/index.d.ts",
+  "types": "./es2021/index.d.ts",
   "bugs": {
     "url": "https://github.com/Hikari-Systems/hs-utils/issues"
   },
