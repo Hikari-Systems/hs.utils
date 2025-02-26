@@ -17,6 +17,8 @@ import {
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import { DynamicStructuredTool, tool } from '@langchain/core/tools';
 import { z } from 'zod';
+import pg from 'pg';
+import fs from 'fs';
 
 import config from '../config';
 import logging from '../logging';
@@ -53,8 +55,20 @@ const streaming = (config.get('llm:streaming') || 'false') === 'true';
 export const getCheckpointSaver = async (): Promise<BaseCheckpointSaver> => {
   const checkpointerDBUrl = config.get('llm:checkpointer:url') || '';
   if (checkpointerDBUrl !== '') {
+    const checkpointerDBCacert = config.get('llm:checkpointer:cacert') || '';
     log.debug('Using postgres checkpointer');
-    const checkpointer = PostgresSaver.fromConnString(checkpointerDBUrl);
+    const ssl =
+      checkpointerDBCacert === ''
+        ? undefined
+        : {
+            rejectUnauthorized: true,
+            ca: fs.readFileSync(checkpointerDBCacert).toString(),
+          };
+    const pgPool = new pg.Pool({
+      connectionString: checkpointerDBUrl,
+      ssl,
+    });
+    const checkpointer = new PostgresSaver(pgPool);
     await checkpointer.setup();
     return checkpointer;
   }
