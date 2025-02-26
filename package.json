@@ -1,6 +1,6 @@
 {
   "name": "@hikari-systems/hs.utils",
-  "version": "0.0.43",
+  "version": "0.0.44",
   "description": "General tools for use in Hikari Systems apps",
   "main": "es2021/index.js",
   "author": "Rick Knowles <rick.knowles@hikari-systems.com>",
