@@ -25,5 +25,11 @@ export {
   RedirectStore,
   UserBaseType,
 } from './oauth2';
+export {
+  ChatHSTogetherAI,
+  ChatHSTogetherAICallOptions,
+} from './langchain/chat-together';
+export { llmResponseForConversation, getModel } from './langchain/stream';
+export { ToolDef, ToolArgumentDef } from './langchain/types';
 
 export * from './types';
