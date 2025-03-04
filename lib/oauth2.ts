@@ -191,7 +191,7 @@ export const doAuthorizeRedirect = async (
   authorizeUrl.searchParams.append('client_id', config.get('oauth2:clientId'));
   authorizeUrl.searchParams.append('redirect_uri', redirectUri);
   authorizeUrl.searchParams.append('state', stateKey);
-  authorizeUrl.searchParams.append('scopes', config.get('oauth2:scopes'));
+  authorizeUrl.searchParams.append('scope', config.get('oauth2:scopes'));
   if (ui_locales) {
     authorizeUrl.searchParams.append('ui_locales', ui_locales); // for auth0
   }
