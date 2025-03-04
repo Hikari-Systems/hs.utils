@@ -180,20 +180,25 @@ export const doAuthorizeRedirect = async (
   callbackUri = '/oauth2/callback',
 ) => {
   const { baseUrl } = forwardedFor(req);
+  const { ui_locales } = req.query as { ui_locales?: string };
   const redirectUri = `${baseUrl}${callbackUri}`;
   const stateKey = v4();
   await redirectStore.set(req, stateKey, `${baseUrl}${path}`);
 
   // build authorization url
-  const authorizeUrl = `${config.get('oauth2:authorizeUrl')}?response_type=code&client_id=${encodeURIComponent(
-    config.get('oauth2:clientId'),
-  )}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(
-    config.get('oauth2:scopes'),
-  )}&state=${encodeURIComponent(stateKey)}`;
+  const authorizeUrl = new URL(`${config.get('oauth2:authorizeUrl')}`);
+  authorizeUrl.searchParams.append('response_type', 'code');
+  authorizeUrl.searchParams.append('client_id', config.get('oauth2:clientId'));
+  authorizeUrl.searchParams.append('redirect_uri', redirectUri);
+  authorizeUrl.searchParams.append('state', stateKey);
+  authorizeUrl.searchParams.append('redirect_uri', config.get('oauth2:scopes'));
+  if (ui_locales) {
+    authorizeUrl.searchParams.append('ui_locales', ui_locales); // for auth0
+  }
   log.debug(
     `Sending authorization request for ${req.url}: url=${authorizeUrl}`,
   );
-  return res.redirect(authorizeUrl);
+  return res.redirect(authorizeUrl.toString());
 };
 
 export const DEFAULT_ERROR_HANDLER =
