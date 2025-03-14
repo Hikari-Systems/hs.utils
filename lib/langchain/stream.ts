@@ -65,7 +65,7 @@ export const getCheckpointSaver = async (): Promise<BaseCheckpointSaver> => {
   log.debug('Using memory checkpointer');
   return new MemorySaver();
 };
-const checkpointSaver: Promise<BaseCheckpointSaver> = getCheckpointSaver();
+let checkpointSaver: Promise<BaseCheckpointSaver>;
 
 export const getModel = async (): Promise<BaseChatModel> => {
   const llmType = config.get('llm:type') || 'openAI';
@@ -140,6 +140,9 @@ export const llmResponseForConversation = async (
       `Langchain implementation requires at least one tool defined`,
     );
   }
+  if (checkpointSaver === undefined) {
+    checkpointSaver = getCheckpointSaver();
+  }
 
   const graph = createReactAgent({
     llm,
@@ -165,7 +168,7 @@ export const llmResponseForConversation = async (
       return;
     }
 
-    const eventStream = await graph.streamEvents(
+    const eventStream = graph.streamEvents(
       {
         messages: [new HumanMessage(thisInputText)],
       },
