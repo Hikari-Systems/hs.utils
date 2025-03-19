@@ -29,7 +29,13 @@ export {
   ChatHSTogetherAI,
   ChatHSTogetherAICallOptions,
 } from './langchain/chat-together';
-export { llmResponseForConversation, getModel } from './langchain/stream';
+export {
+  llmResponseForConversation,
+  getModel,
+  serveResponseFromGraph,
+  getCheckpointSaver,
+  convertToLangchainTool,
+} from './langchain/stream';
 export { ToolDef, ToolArgumentDef } from './langchain/types';
 
 export * from './types';
