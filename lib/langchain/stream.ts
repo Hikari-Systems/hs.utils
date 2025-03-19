@@ -7,6 +7,7 @@ import { HumanMessage } from '@langchain/core/messages';
 import { ChatBedrockConverse } from '@langchain/aws';
 import { ChatOpenAI } from '@langchain/openai';
 // import { ChatTogetherAI } from '@langchain/community/chat_models/togetherai';
+import { CompiledStateGraph } from '@langchain/langgraph';
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import {
@@ -125,32 +126,12 @@ export const getModel = async (): Promise<BaseChatModel> => {
   throw new Error(`Unknown LLM type: ${llmType}`);
 };
 
-export const llmResponseForConversation = async (
+export const serveResponseFromGraph = async (
   evt: EventEmitter,
-  llm: BaseChatModel,
-  promptText: string,
-  toolset: ToolDef[],
+  graph: CompiledStateGraph<any, any, any, any, any, any>,
   threadId: string,
   thisInputText: string,
 ): Promise<void> => {
-  // log.debug(`Tools available: ${toolset.map((x) => x.name).join(', ')}`);
-  const langchainTools = toolset.map(convertToLangchainTool);
-  if (langchainTools.length === 0) {
-    throw new Error(
-      `Langchain implementation requires at least one tool defined`,
-    );
-  }
-  if (checkpointSaver === undefined) {
-    checkpointSaver = getCheckpointSaver();
-  }
-
-  const graph = createReactAgent({
-    llm,
-    tools: langchainTools,
-    checkpointSaver: await checkpointSaver,
-    prompt: promptText,
-  });
-
   try {
     if (!streaming) {
       const runId = v4();
@@ -225,4 +206,32 @@ export const llmResponseForConversation = async (
       message: 'Error communicating with AI (possibly check account balance?)',
     });
   }
+};
+
+export const llmResponseForConversation = async (
+  evt: EventEmitter,
+  llm: BaseChatModel,
+  promptText: string,
+  toolset: ToolDef[],
+  threadId: string,
+  thisInputText: string,
+): Promise<void> => {
+  // log.debug(`Tools available: ${toolset.map((x) => x.name).join(', ')}`);
+  const langchainTools = toolset.map(convertToLangchainTool);
+  if (langchainTools.length === 0) {
+    throw new Error(
+      `Langchain implementation requires at least one tool defined`,
+    );
+  }
+  if (checkpointSaver === undefined) {
+    checkpointSaver = getCheckpointSaver();
+  }
+
+  const graph = createReactAgent({
+    llm,
+    tools: langchainTools,
+    checkpointSaver: await checkpointSaver,
+    prompt: promptText,
+  });
+  return serveResponseFromGraph(evt, graph, threadId, thisInputText);
 };
