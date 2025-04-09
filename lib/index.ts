@@ -18,6 +18,7 @@ export {
   AddUserByEmailFunction,
   GetOauthProfileBySubFunction,
   UpsertOauthProfileFunction,
+  UpdateUserFromOauthProfileFunction,
   DEFAULT_ERROR_HANDLER,
   getSessionRedirectStore,
   OauthProfileResponse,
