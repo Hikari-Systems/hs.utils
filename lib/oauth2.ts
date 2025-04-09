@@ -128,7 +128,7 @@ export interface UserBaseType {
 export interface OauthProfileType {
   sub: string;
   userId: string;
-  profileJson: string;
+  profileJson: OauthProfileResponse;
 }
 
 type ERROR_HANDLER_TYPE = (
