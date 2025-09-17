@@ -2,11 +2,10 @@ import express from 'express';
 import dayjs from 'dayjs';
 import { v4 } from 'uuid';
 
-import config from '../config';
-import logging from '../logging';
-import { delRedisVal, getRedisVal, setRedisVal } from '../redis';
-import { LocalNextFunction, LocalRequest, LocalResponse } from '../types';
-import { forwardedFor } from '../forwardedFor';
+import config from './config';
+import logging from './logging';
+import { LocalNextFunction, LocalRequest, LocalResponse } from './types';
+import { forwardedFor } from './forwardedFor';
 
 const log = logging('middleware:authentication');
 
@@ -51,7 +50,7 @@ const doTokenExchange = async (
       },
     });
     const tokenResponse = await response.text();
-    log.debug(`Token exchange response  is ${tokenResponse}`);
+    log.debug(`Token exchange response is ${tokenResponse}`);
     return JSON.parse(tokenResponse) as TokenResponse;
   } catch (err) {
     log.error(`Error doing token exchange: ${code}`, err);
@@ -118,6 +117,10 @@ export type UpsertOauthProfileFunction<O> = (
   userId: string,
   profileJson: string,
 ) => Promise<O>;
+export type UpdateUserFromOauthProfileFunction<U, O> = (
+  userId: string,
+  profile: O,
+) => Promise<U>;
 
 export interface UserBaseType {
   email: string;
@@ -125,7 +128,7 @@ export interface UserBaseType {
 export interface OauthProfileType {
   sub: string;
   userId: string;
-  profileJson: string;
+  profileJson: OauthProfileResponse;
 }
 
 type ERROR_HANDLER_TYPE = (
@@ -144,13 +147,16 @@ const doUserRowCreation = async <
   addUserByEmail: AddUserByEmailFunction<U>,
   getOauthProfileBySub: GetOauthProfileBySubFunction<O>,
   upsertOauthProfile: UpsertOauthProfileFunction<O>,
+  updateUserFromOauthProfile?: UpdateUserFromOauthProfileFunction<U, O>,
 ) => {
   let userId;
+  let userAdded = false;
   if (!dlProfile.email) {
     const savedProfile = await getOauthProfileBySub(dlProfile.sub);
     if (!savedProfile) {
       const user = await addUserByEmail('', dlProfile);
       userId = user.id;
+      userAdded = true;
     } else {
       userId = savedProfile.userId;
     }
@@ -158,37 +164,56 @@ const doUserRowCreation = async <
     let user = await getUserByEmail(dlProfile.email);
     if (!user) {
       user = await addUserByEmail(dlProfile.email, dlProfile);
+      userAdded = true;
     }
     userId = user.id;
   }
 
-  await upsertOauthProfile(dlProfile.sub, userId, JSON.stringify(dlProfile));
+  const oauthProfile = await upsertOauthProfile(
+    dlProfile.sub,
+    userId,
+    JSON.stringify(dlProfile),
+  );
+  if (updateUserFromOauthProfile && !userAdded) {
+    await updateUserFromOauthProfile(userId, oauthProfile);
+  }
   return userId;
 };
 
 // ////////////////////////////
+export type RedirectStore = {
+  get: (req: LocalRequest, stateKey: string) => Promise<string>;
+  set: (req: LocalRequest, stateKey: string, val: string) => Promise<void>;
+  del: (req: LocalRequest, stateKey: string) => Promise<void>;
+};
 
 export const doAuthorizeRedirect = async (
   path: string,
   req: LocalRequest,
   res: LocalResponse,
+  redirectStore: RedirectStore,
   callbackUri = '/oauth2/callback',
 ) => {
   const { baseUrl } = forwardedFor(req);
+  const { ui_locales } = req.query as { ui_locales?: string };
   const redirectUri = `${baseUrl}${callbackUri}`;
   const stateKey = v4();
-  await setRedisVal(`authState:${stateKey}`, `${baseUrl}${path}`);
+  await redirectStore.set(req, stateKey, `${baseUrl}${path}`);
 
   // build authorization url
-  const authorizeUrl = `${config.get('oauth2:authorizeUrl')}?response_type=code&client_id=${encodeURIComponent(
-    config.get('oauth2:clientId'),
-  )}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(
-    config.get('oauth2:scopes'),
-  )}&state=${encodeURIComponent(stateKey)}`;
+  const authorizeUrl = new URL(`${config.get('oauth2:authorizeUrl')}`);
+  authorizeUrl.searchParams.append('response_type', 'code');
+  authorizeUrl.searchParams.append('client_id', config.get('oauth2:clientId'));
+  authorizeUrl.searchParams.append('redirect_uri', redirectUri);
+  authorizeUrl.searchParams.append('state', stateKey);
+  authorizeUrl.searchParams.append('scope', config.get('oauth2:scopes'));
+  if (ui_locales) {
+    authorizeUrl.searchParams.append('ui_locales', ui_locales); // for auth0
+  }
   log.debug(
     `Sending authorization request for ${req.url}: url=${authorizeUrl}`,
   );
-  return res.redirect(authorizeUrl);
+  return res.redirect(authorizeUrl.toString());
 };
 
 export const DEFAULT_ERROR_HANDLER =
@@ -199,24 +224,58 @@ export const DEFAULT_ERROR_HANDLER =
     return Promise.resolve();
   };
 
+export const getSessionRedirectStore = (): RedirectStore => ({
+  get: async (req: LocalRequest, stateKey: string) =>
+    (req.session.postLoginRedirects || {})[stateKey],
+  set: async (req: LocalRequest, stateKey: string, val: string) => {
+    if (!req.session?.postLoginRedirects) {
+      req.session.postLoginRedirects = {};
+    }
+    req.session.postLoginRedirects[stateKey] = val;
+  },
+  del: async (req: LocalRequest, stateKey: string) => {
+    if (!req.session?.postLoginRedirects) {
+      req.session.postLoginRedirects = {};
+    }
+    delete req.session.postLoginRedirects[stateKey];
+  },
+});
+
 export interface Oauth2PathConfig {
   regex: RegExp;
   whitelist: boolean;
   failFast: boolean;
 }
 
+export interface AuthorizeMiddlewareProps<
+  T extends UserBaseType,
+  U extends OauthProfileType,
+> {
+  pathConfigs: Oauth2PathConfig[];
+  getUserByEmail: GetUserByEmailFunction<T>;
+  addUserByEmail: AddUserByEmailFunction<T>;
+  getOauthProfileBySub: GetOauthProfileBySubFunction<U>;
+  upsertOauthProfile: UpsertOauthProfileFunction<U>;
+  updateUserFromOauthProfile?: UpdateUserFromOauthProfileFunction<T, U>;
+  stateStore: RedirectStore;
+  callbackErrorHandler: ERROR_HANDLER_TYPE;
+  callbackUri: string;
+}
+
 export const authorizeMiddleware = <
   T extends UserBaseType,
   U extends OauthProfileType,
->(
-  pathConfigs: Oauth2PathConfig[],
-  getUserByEmail: GetUserByEmailFunction<T>,
-  addUserByEmail: AddUserByEmailFunction<T>,
-  getOauthProfileBySub: GetOauthProfileBySubFunction<U>,
-  upsertOauthProfile: UpsertOauthProfileFunction<U>,
+>({
+  pathConfigs,
+  getUserByEmail,
+  addUserByEmail,
+  getOauthProfileBySub,
+  upsertOauthProfile,
+  updateUserFromOauthProfile = undefined,
+  stateStore = getSessionRedirectStore(),
   callbackErrorHandler = DEFAULT_ERROR_HANDLER(400),
   callbackUri = '/oauth2/callback',
-) => {
+}: AuthorizeMiddlewareProps<T, U>) => {
   const router = express.Router();
   router.get(
     callbackUri,
@@ -241,7 +300,7 @@ export const authorizeMiddleware = <
         if (!code) {
           throw new Error('No code supplied');
         }
-        const redirectUri = await getRedisVal(`authState:${stateKey}`);
+        const redirectUri = await stateStore.get(req, stateKey);
         if (!redirectUri) {
           throw new Error(`No state found: key=${stateKey}`);
         }
@@ -253,7 +312,7 @@ export const authorizeMiddleware = <
         if (!tokenResp?.access_token) {
           throw new Error(`No access token in response`);
         }
-        await delRedisVal(`authState:${stateKey}`);
+        await stateStore.del(req, stateKey);
 
         const dlProfile = await getOauthProfileByToken(tokenResp?.access_token);
 
@@ -263,6 +322,7 @@ export const authorizeMiddleware = <
           addUserByEmail,
           getOauthProfileBySub,
           upsertOauthProfile,
+          updateUserFromOauthProfile,
         );
 
         req.session.user = {
@@ -345,24 +405,37 @@ export const authorizeMiddleware = <
         // log.debug(`Authentication check passed: ${path}`);
         return next();
       }
-      return doAuthorizeRedirect(req.url, req, res, callbackUri);
+      return doAuthorizeRedirect(req.url, req, res, stateStore, callbackUri);
     },
   );
   return router;
 };
 
+export interface BearerMiddlewareProps<
+  T extends UserBaseType,
+  U extends OauthProfileType,
+> {
+  pathConfigs: Oauth2PathConfig[];
+  getUserByEmail: GetUserByEmailFunction<T>;
+  addUserByEmail: AddUserByEmailFunction<T>;
+  getOauthProfileBySub: GetOauthProfileBySubFunction<U>;
+  upsertOauthProfile: UpsertOauthProfileFunction<U>;
+  updateUserFromOauthProfile?: UpdateUserFromOauthProfileFunction<T, U>;
+  authErrorHandler: ERROR_HANDLER_TYPE;
+}
 /*
  * aim to keep the getLoggedInUser function returning the logged in user even if whitelisted
  */
 export const bearerMiddleware =
-  <T extends UserBaseType, U extends OauthProfileType>(
-    pathConfigs: Oauth2PathConfig[],
-    getUserByEmail: GetUserByEmailFunction<T>,
-    addUserByEmail: AddUserByEmailFunction<T>,
-    getOauthProfileBySub: GetOauthProfileBySubFunction<U>,
-    upsertOauthProfile: UpsertOauthProfileFunction<U>,
+  <T extends UserBaseType, U extends OauthProfileType>({
+    pathConfigs,
+    getUserByEmail,
+    addUserByEmail,
+    getOauthProfileBySub,
+    upsertOauthProfile,
+    updateUserFromOauthProfile = undefined,
     authErrorHandler = DEFAULT_ERROR_HANDLER(401),
-  ) =>
+  }: BearerMiddlewareProps<T, U>) =>
   async (req: LocalRequest, res: LocalResponse, next: LocalNextFunction) => {
     const path = req.baseUrl + req.path;
     const matchedPath = pathConfigs?.find((x) => x.regex.test(path));
@@ -402,6 +475,7 @@ export const bearerMiddleware =
           addUserByEmail,
           getOauthProfileBySub,
           upsertOauthProfile,
+          updateUserFromOauthProfile,
         );
         return dlUserId;
       })();

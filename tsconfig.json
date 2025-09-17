@@ -2,10 +2,10 @@
   "extends": "@tsconfig/node22/tsconfig.json",
   "rootDir": ".",
   "compilerOptions": {
-    "target": "ES5",
+    "target": "ES2021",
     "strict": true,
     "esModuleInterop": true,
-    "outDir": "./es5"
+    "outDir": "./es2021"
   },
-  "include": ["lib/**/*", "./types.d.ts"]
+  "include": ["lib/**/*", "**/types.d.ts"]
 }

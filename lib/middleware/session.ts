@@ -1,87 +1,116 @@
-import session from 'express-session';
+import session, { MemoryStore, Store } from 'express-session';
 import RedisStore from 'connect-redis';
-import { createClient, RedisClientType } from 'redis';
+import connectPgSimple, { PGStore } from 'connect-pg-simple';
+import { createClient } from 'redis';
+
 import config from '../config';
 import logging from '../logging';
 import { LocalNextFunction, LocalRequest, LocalResponse } from '../types';
+import { getConnectionPoolFromConfigPrefix } from '../pg/pgconfig';
 
-const log = logging('middelware:session');
+const log = logging('middleware:session');
 
-const redisEnabled = (config.get('redis:enabled') || 'false') === 'true';
-if (!redisEnabled) {
-  log.warn(
-    'WARNING: Redis disabled in config (sessions using default memory store)',
-  );
-}
+const { configString, configBoolean } = config;
 
-const getClient = () => {
-  if (redisEnabled) {
-    return createClient({
-      url: config.get('redis:url'),
-      password: config.get('redis:auth') || undefined,
-    });
+const getSameSite = () => {
+  const sameSiteStr = configString('session:sameSite', '');
+  switch (sameSiteStr) {
+    case 'true':
+      return 'strict';
+    case 'strict':
+    case 'lax':
+    case 'none':
+      return sameSiteStr;
+    default:
+      return undefined;
   }
-  return null;
 };
 
-// hold a promise in module scope, then await the same promise to get the resolved value
-// before using it each time. Assumes these objects are shareable across requests (todo: verify)
-const redisConnPromise: Promise<RedisClientType<any, any, any> | null> =
-  (async () => {
-    const redisClient = getClient();
-    if (!redisClient) {
-      return null;
-    }
-    redisClient.on('ready', () => {
-      log.debug('Session store in redis connected');
-    });
-    redisClient.on('error', (e) => {
-      log.error('Error in redis connection', e);
-    });
-    redisClient.on('reconnecting', () => {
-      log.debug('Session store in redis reconnecting');
-    });
-    redisClient.on('end', () => {
-      log.debug('Session store in redis disconnected');
-    });
-    return redisClient.connect();
-  })();
+type StoreGetter = () => Promise<Store | undefined>;
+const memoryStore = new MemoryStore();
+const memoryStoreGetter: StoreGetter = () => Promise.resolve(memoryStore);
 
-export const sessionMiddleware = async (
-  req: LocalRequest,
-  res: LocalResponse,
-  next: LocalNextFunction,
-) => {
-  const sameSite = config.get('session:sameSite') || '';
-  const baseConfig = {
-    secret: config.get('session:secret') || '',
-    proxy: (config.get('session:proxy') || 'true') === 'true',
-    resave: (config.get('session:resave') || 'false') === 'true',
-    saveUninitialized:
-      (config.get('session:saveUninitialized') || 'false') === 'true',
-    cookie: {
-      httpOnly:
-        (config.get('session:httpOnly') || 'false') === 'true'
-          ? true
-          : undefined,
-      sameSite: sameSite === '' ? undefined : sameSite,
-      secure:
-        (config.get('session:secure') || 'false') === 'true' ? true : undefined,
-      signed:
-        (config.get('session:signed') || 'false') === 'true' ? true : undefined,
-    },
+export const sessionMiddleware =
+  (storeGetter: StoreGetter = memoryStoreGetter) =>
+  async (req: LocalRequest, res: LocalResponse, next: LocalNextFunction) => {
+    const baseConfig: session.SessionOptions = {
+      secret: configString('session:secret', ''),
+      proxy: configBoolean('session:proxy', true),
+      resave: configBoolean('session:resave', false),
+      saveUninitialized: configBoolean('session:saveUninitialized', false),
+      cookie: {
+        httpOnly: configBoolean('session:httpOnly', false) || undefined,
+        sameSite: getSameSite(),
+        secure: configBoolean('session:secure', false) || undefined,
+        signed: configBoolean('session:signed', false) || undefined,
+      },
+    };
+    const store = (await storeGetter()) || (await memoryStoreGetter());
+    return session({ ...baseConfig, store })(req, res, next);
   };
-  if (redisEnabled) {
-    const redisConn = await redisConnPromise;
-    return session({
-      ...baseConfig,
-      store: new RedisStore({
+
+// //////// REDIS IMPLEMENTATION - START
+let redisStore: RedisStore | undefined;
+
+export const redisStoreGetter: StoreGetter = async () => {
+  const url = configString('session:redis:url', '').trim();
+  if (url !== '') {
+    if (!redisStore) {
+      const redisClient = createClient({
+        url,
+        password: configString('session:redis:auth', undefined),
+      });
+      redisClient.on('ready', () => {
+        log.debug('Session redis connection available');
+      });
+      redisClient.on('error', (e) => {
+        log.error('Error in session redis connection', e);
+      });
+      redisClient.on('reconnecting', () => {
+        log.debug('Session redis connection interrupted - reconnecting');
+      });
+      redisClient.on('end', () => {
+        log.debug('Session redis connection is disconnected');
+      });
+      const redisConn = await redisClient.connect();
+      redisStore = new RedisStore({
         client: redisConn,
-        prefix: config.get('session:prefix') || '',
-      }),
-    })(req, res, next);
+        prefix: configString('session:prefix', ''),
+      });
+    }
+
+    if (redisStore) {
+      return redisStore;
+    }
   }
-  return session({
-    ...baseConfig,
-  })(req, res, next);
+  log.warn(
+    'WARNING: Redis session configuration missing: using in memory session store',
+  );
+  return undefined;
 };
+// //////// REDIS IMPLEMENTATION - END
+
+// //////// POSTGRES IMPLEMENTATION - START
+const PGSession = connectPgSimple(session);
+
+let pgSessionStore: PGStore | undefined;
+export const postgresStoreGetter: StoreGetter = async () => {
+  const host = (config.get('session:db:host') || '').trim();
+  if (host !== '') {
+    if (!pgSessionStore) {
+      pgSessionStore = new PGSession({
+        pool: getConnectionPoolFromConfigPrefix('session:db'),
+        tableName: config.get('session:db:tableName') || 'session',
+      });
+    }
+
+    if (pgSessionStore) {
+      return pgSessionStore;
+    }
+  }
+  log.warn(
+    'WARNING: PostgreSQL session configuration missing: using in memory session store',
+  );
+  return undefined;
+};
+// //////// POSTGRES IMPLEMENTATION - END

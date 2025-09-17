@@ -18,4 +18,13 @@ const get = (key: string) => {
   return val;
 };
 
-export default { get }; // export a wrapped nconf.get()
+const configBoolean = (key: string, defaultValue = false): boolean =>
+  (get(key) || String(defaultValue)).trim() === 'true';
+
+const configInteger = (key: string, defaultValue: number): number =>
+  get(key) ? parseInt(config.get(key), 10) : defaultValue;
+
+const configString = (key: string, defaultValue = ''): string =>
+  (get(key) || defaultValue).trim();
+
+export default { get, configBoolean, configInteger, configString }; // export a wrapped nconf.get()

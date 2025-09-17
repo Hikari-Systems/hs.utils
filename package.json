@@ -1,8 +1,8 @@
 {
   "name": "@hikari-systems/hs.utils",
-  "version": "0.0.31",
+  "version": "0.0.53",
   "description": "General tools for use in Hikari Systems apps",
-  "main": "es5/index.js",
+  "main": "es2021/index.js",
   "author": "Rick Knowles <rick.knowles@hikari-systems.com>",
   "license": "SEE LICENSE IN LICENSE.md",
   "scripts": {
@@ -10,29 +10,41 @@
     "test": "jest",
     "lint": "eslint ./lib",
     "checkTypes": "tsc --noEmit",
-    "build": "rm -rf ./es5 && tsc --declaration && npm run copy-dts",
+    "build": "rm -rf ./es2021 && tsc --declaration && npm run copy-dts",
     "test-ci": "npm run prepare && npm test",
     "format": "npx prettier --write --ignore-unknown \"**/*.*[t|j]s\"",
-    "copy-dts": "cp ./lib/*.d.ts es5 && touch es5/types.js"
+    "copy-dts": "cp ./lib/*.d.ts es2021 && touch es2021/types.js"
   },
   "dependencies": {
+    "@langchain/aws": "^0.1.4",
+    "@langchain/core": "^0.3.40",
+    "@langchain/langgraph": "^0.2.49",
+    "@langchain/langgraph-checkpoint": "^0.0.15",
+    "@langchain/langgraph-checkpoint-postgres": "^0.0.4",
+    "@langchain/openai": "^0.4.4",
     "@types/express-serve-static-core": "^4.19.5",
+    "connect-pg-simple": "^10.0.0",
     "connect-redis": "^7.1.1",
     "dayjs": "^1.11.11",
-    "express": "^4.19.2",
+    "express": "^4.21.0",
     "express-session": "^1.18.0",
     "nconf": "^0.12.1",
+    "pg": "^8.13.3",
     "redis": "^4.6.14",
+    "together-ai": "^0.13.0",
     "uuid": "^10.0.0",
-    "winston": "^3.13.0"
+    "winston": "^3.13.0",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@tsconfig/node22": "^22.0.0",
+    "@types/connect-pg-simple": "^7.0.3",
     "@types/express": "^4.17.21",
     "@types/express-session": "^1.18.0",
     "@types/jest": "^29.5.12",
     "@types/nconf": "^0.10.6",
     "@types/node": "^20.14.9",
+    "@types/pg": "^8.11.10",
     "@types/redis": "^4.0.11",
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
@@ -59,7 +71,7 @@
     "hikari",
     "utilities"
   ],
-  "types": "./es5/index.d.ts",
+  "types": "./es2021/index.d.ts",
   "bugs": {
     "url": "https://github.com/Hikari-Systems/hs-utils/issues"
   },
