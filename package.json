@@ -4,7 +4,10 @@
   "description": "General tools for use in Hikari Systems apps",
   "main": "es2021/index.js",
   "author": "Rick Knowles <rick.knowles@hikari-systems.com>",
-  "license": "SEE LICENSE IN LICENSE.md",
+  "license": {
+    "type": "Apache-2.0",
+    "url": "https://opensource.org/licenses/apache2.0.php"
+  },
   "scripts": {
     "prepare": "npm run lint && npm run checkTypes && npm run build",
     "test": "jest",
