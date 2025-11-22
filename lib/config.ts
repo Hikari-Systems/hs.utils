@@ -27,4 +27,6 @@ const configInteger = (key: string, defaultValue: number): number =>
 const configString = (key: string, defaultValue = ''): string =>
   (get(key) || defaultValue).trim();
 
-export default { get, configBoolean, configInteger, configString }; // export a wrapped nconf.get()
+const getAllKeys = (): string[] => Object.keys(config.get());
+
+export default { get, configBoolean, configInteger, configString, getAllKeys }; // export a wrapped nconf.get()
