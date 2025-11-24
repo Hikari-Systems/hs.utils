@@ -18,15 +18,27 @@ const get = (key: string) => {
   return val;
 };
 
+const getAllKeys = (): string[] => Object.keys(config.get());
+
 const configBoolean = (key: string, defaultValue = false): boolean =>
   (get(key) || String(defaultValue)).trim() === 'true';
 
-const configInteger = (key: string, defaultValue: number): number =>
+const configInteger = (key: string, defaultValue = 0): number =>
   get(key) ? parseInt(config.get(key), 10) : defaultValue;
 
 const configString = (key: string, defaultValue = ''): string =>
   (get(key) || defaultValue).trim();
 
-const getAllKeys = (): string[] => Object.keys(config.get());
+const configFloat = (key: string, defaultValue = 0.0): number => {
+  const value = get(key) || String(defaultValue);
+  return parseFloat(`${value}`);
+};
 
-export default { get, configBoolean, configInteger, configString, getAllKeys }; // export a wrapped nconf.get()
+export default {
+  get,
+  getAllKeys,
+  configBoolean,
+  configInteger,
+  configString,
+  configFloat,
+}; // export a wrapped nconf.get()
