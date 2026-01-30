@@ -10,6 +10,7 @@ export {
 } from './middleware/session';
 export { timingMiddleware } from './middleware/timing';
 export { getRedisVal, setRedisVal, delRedisVal } from './redis';
+export { apiKeyMiddleware } from './middleware/apikey';
 export {
   authorizeMiddleware,
   bearerMiddleware,
