@@ -25,6 +25,7 @@ import { ChatHSTogetherAI } from './chat-together';
 import { getConnectionPoolFromConfigPrefix } from '../pg/pgconfig';
 
 const log = logging('langchain:stream');
+const { configString, configInteger, configFloat, configBoolean } = config;
 
 const wrapZodNodeWithDesc = (item: any, ad: ToolArgumentDef) => {
   const itemNullable = ad.required ? item : item.nullable();
@@ -49,12 +50,13 @@ export const convertToLangchainTool = (def: ToolDef): DynamicStructuredTool =>
     ),
   });
 
-const streaming = (config.get('llm:streaming') || 'false') === 'true';
-
-export const getCheckpointSaver = async (): Promise<BaseCheckpointSaver> => {
-  const checkpointerDBHost = (
-    config.get('llm:checkpointer:db:host') || ''
-  ).trim();
+export const getCheckpointSaver = async (
+  configPrefix: string = '',
+): Promise<BaseCheckpointSaver> => {
+  const checkpointerDBHost = configString(
+    `${configPrefix}llm:checkpointer:db:host`,
+    '',
+  );
   if (checkpointerDBHost !== '') {
     log.debug('Using postgres checkpointer');
     const checkpointer = new PostgresSaver(
@@ -68,12 +70,19 @@ export const getCheckpointSaver = async (): Promise<BaseCheckpointSaver> => {
 };
 let checkpointSaver: Promise<BaseCheckpointSaver>;
 
-export const getModel = async (): Promise<BaseChatModel> => {
-  const llmType = config.get('llm:type') || 'openAI';
+export const getModel = async (
+  configPrefix: string = '',
+): Promise<BaseChatModel> => {
+  const llmType = configString(`${configPrefix}llm:type`, 'openAI');
+  const streaming = configBoolean(`${configPrefix}llm:streaming`, false);
   if (llmType === 'openAI') {
-    const modelName = config.get('llm:modelName') || 'gpt-4-turbo';
-    const apiKey = config.get('llm:apiKey') || '';
-    const baseURL = config.get('llm:baseUrl') || '';
+    const modelName = configString(
+      `${configPrefix}llm:modelName`,
+      'gpt-4-turbo',
+    );
+    const apiKey = configString(`${configPrefix}llm:apiKey`, '');
+    const baseURL = configString(`${configPrefix}llm:baseUrl`, '');
+
     if (apiKey === '' && baseURL === '') {
       log.warn('WARNING: openAI api key and baseURL are both not set');
     }
@@ -85,9 +94,11 @@ export const getModel = async (): Promise<BaseChatModel> => {
     });
   }
   if (llmType === 'togetherAI') {
-    const modelName =
-      config.get('llm:modelName') || 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
-    const apiKey = config.get('llm:apiKey') || '';
+    const modelName = configString(
+      `${configPrefix}llm:modelName`,
+      'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+    );
+    const apiKey = configString(`${configPrefix}llm:apiKey`, '');
     if (apiKey === '') {
       log.warn('WARNING: togetherAI api key is not set');
     }
@@ -97,13 +108,29 @@ export const getModel = async (): Promise<BaseChatModel> => {
     });
   }
   if (llmType === 'bedrock') {
-    const modelName =
-      config.get('llm:modelName') || 'us.meta.llama3-3-70b-instruct-v1:0';
-    const modelRegion = config.get('llm:bedrock:modelRegion');
-    const bedrockAccessKeyId = config.get('llm:bedrock:awsAccessKeyId');
-    const bedrockSecretAccessKey = config.get('llm:bedrock:awsSecretAccessKey');
-    const temperature = parseFloat(
-      config.get('llm:bedrock:temperature') || '0.5',
+    const modelName = configString(
+      `${configPrefix}llm:modelName`,
+      'us.meta.llama3-3-70b-instruct-v1:0',
+    );
+    const modelRegion = configString(
+      `${configPrefix}llm:bedrock:modelRegion`,
+      'us-east-1',
+    );
+    const maxTokens = configInteger(
+      `${configPrefix}llm:bedrock:maxTokens`,
+      4096,
+    );
+    const bedrockAccessKeyId = configString(
+      `${configPrefix}llm:bedrock:awsAccessKeyId`,
+      '',
+    );
+    const bedrockSecretAccessKey = configString(
+      `${configPrefix}llm:bedrock:awsSecretAccessKey`,
+      '',
+    );
+    const temperature = configFloat(
+      `${configPrefix}llm:bedrock:temperature`,
+      0.5,
     );
     if (bedrockAccessKeyId === '') {
       log.warn('WARNING: AWS bedrock accessKeyId is not set');
@@ -131,6 +158,7 @@ export const serveResponseFromGraph = async (
   graph: CompiledStateGraph<any, any, any, any, any, any>,
   threadId: string,
   thisInput: HumanMessage,
+  streaming: boolean,
 ): Promise<void> => {
   try {
     if (!streaming) {
@@ -215,6 +243,7 @@ export const llmResponseForConversation = async (
   toolset: ToolDef[],
   threadId: string,
   thisInputText: string,
+  streaming: boolean,
 ): Promise<void> => {
   // log.debug(`Tools available: ${toolset.map((x) => x.name).join(', ')}`);
   const langchainTools = toolset.map(convertToLangchainTool);
@@ -238,5 +267,6 @@ export const llmResponseForConversation = async (
     graph,
     threadId,
     new HumanMessage(thisInputText),
+    streaming,
   );
 };
