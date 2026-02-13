@@ -142,7 +142,7 @@ export const getModel = async (
       model: modelName,
       region: modelRegion,
       streaming,
-      maxTokens: 4096,
+      maxTokens,
       temperature,
       credentials: {
         accessKeyId: bedrockAccessKeyId,
