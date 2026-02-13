@@ -130,7 +130,7 @@ export const serveResponseFromGraph = async (
   evt: EventEmitter,
   graph: CompiledStateGraph<any, any, any, any, any, any>,
   threadId: string,
-  thisInputText: string,
+  thisInput: HumanMessage,
 ): Promise<void> => {
   try {
     if (!streaming) {
@@ -138,7 +138,7 @@ export const serveResponseFromGraph = async (
       evt.emit('start', { runId });
       const result = await graph.invoke(
         {
-          messages: [new HumanMessage(thisInputText)],
+          messages: [thisInput],
         },
         { configurable: { thread_id: threadId } },
       );
@@ -149,14 +149,14 @@ export const serveResponseFromGraph = async (
       return;
     }
 
+    let runId;
     const eventStream = graph.streamEvents(
       {
-        messages: [new HumanMessage(thisInputText)],
+        messages: [thisInput],
       },
       { version: 'v2', configurable: { thread_id: threadId } },
     );
 
-    let runId;
     // eslint-disable-next-line no-restricted-syntax
     for await (const event of eventStream) {
       // log.debug(`evt: ${JSON.stringify(event)}`);
@@ -233,5 +233,10 @@ export const llmResponseForConversation = async (
     checkpointSaver: await checkpointSaver,
     prompt: promptText,
   });
-  return serveResponseFromGraph(evt, graph, threadId, thisInputText);
+  return serveResponseFromGraph(
+    evt,
+    graph,
+    threadId,
+    new HumanMessage(thisInputText),
+  );
 };
