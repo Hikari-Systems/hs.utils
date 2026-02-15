@@ -4,17 +4,15 @@ import { LocalNextFunction, LocalRequest, LocalResponse } from '../types';
 
 const { configString } = config;
 const log = logging('middleware:apikey');
-const apiKey = configString('server:apiKey', '');
-if (apiKey === '') {
-  log.warn('WARNING: server:apiKey is not set, allowing all requests');
-}
 
 export const apiKeyMiddleware = (
   req: LocalRequest,
   res: LocalResponse,
   next: LocalNextFunction,
 ) => {
+  const apiKey = configString('server:apiKey', '');
   if (apiKey === '') {
+    log.warn('WARNING: server:apiKey is not set, allowing all requests');
     return next();
   }
   const { 'X-Api-Key': apiKeyHeader } = req.headers;

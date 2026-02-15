@@ -72,6 +72,9 @@
     "type": "git",
     "url": "git+https://github.com/Hikari-Systems/hs-utils.git"
   },
+  "overrides": {
+    "langsmith": ">=0.4.6"
+  },
   "keywords": [
     "hikari",
     "utilities"
