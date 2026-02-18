@@ -15,6 +15,7 @@ A comprehensive utility library for Node.js development projects at Hikari Syste
     - [Session Middleware](#session-middleware)
     - [Timing Middleware](#timing-middleware)
   - [Redis Client](#redis-client)
+  - [Mail](#mail)
   - [OAuth2 Authentication](#oauth2-authentication)
   - [PostgreSQL Configuration](#postgresql-configuration)
   - [LangChain Integration](#langchain-integration)
@@ -301,6 +302,67 @@ await delRedisVal('my:key');
 - Returns `null` if Redis is disabled or connection fails
 - Automatically manages connection lifecycle
 - Logs connection events (ready, error, reconnecting, end)
+
+### Mail
+
+**Location:** `lib/mail.ts`
+
+Handlebars-based mailer using nodemailer. Renders HTML and optional plain-text templates and sends via configurable SMTP transport.
+
+#### Exports
+
+- **`MAIL_TRANSPORT_CONFIG_PREFIX`**: Config key prefix for transport options (default: `'mail:transport:'`).
+- **`getMailTransportConfig(prefix?)`**: Builds nodemailer `createTransport()` options from hs.utils config. Only includes properties that are set. Supports under the prefix: `host`, `port`, `service`, `secure`, `ignoreTLS`, `requireTLS`, `opportunisticTLS`, `user`, `pass`, `name`, `localAddress`, `authMethod`, `connectionTimeout`, `greetingTimeout`, `socketTimeout`, `dnsTimeout`, `transactionLog`, `debug`, `tls:rejectUnauthorized`, `tls:minVersion`.
+- **`createMailer(templatePath: string)`**: Factory that creates a mailer bound to a directory of Handlebars templates. Returns an object with:
+  - **`render(template, data)`**: Renders the HTML template (alias for `renderHtml`).
+  - **`renderHtml(template, data)`**: Renders the `.html.hbs` template with the given data.
+  - **`renderText(template, data)`**: Renders the `.text.hbs` template if it exists; returns `null` otherwise.
+  - **`renderOptions(template, data)`**: Builds full `MailOptions` (from, to, subject, html, text) from template config and rendered templates.
+  - **`send(template, data)`**: Renders options and sends the email via the configured transport.
+
+#### Types
+
+- **`MailMessageConfig`**: `{ from, to, subject }` (strings or `{ name, address }`).
+- **`MailOptions`**: `{ from, to, subject, text?, html? }`.
+- **`CreateMailer`**: Type of the function returned by `createMailer`.
+
+#### Configuration
+
+**Transport** (under `mail:transport:`):
+
+- `host`, `port`, `service`, `name`, `authMethod`, `localAddress` (string/integer)
+- `user`, `pass` (auth; auth only added if `user` is set)
+- `secure`, `ignoreTLS`, `requireTLS`, `opportunisticTLS` (boolean)
+- `connectionTimeout`, `greetingTimeout`, `socketTimeout`, `dnsTimeout` (integer ms)
+- `transactionLog`, `debug` (boolean)
+- `tls:rejectUnauthorized` (boolean), `tls:minVersion` (string)
+
+**Per-message** (under `mail:messages:<templateName>:`):
+
+- `from`, `fromName`, `to`, `toName`, `subject`
+
+**Defaults:**
+
+- `mail:defaultFrom`, `mail:defaultFromName`, `mail:defaultSubject` (used when a message config omits from/to/subject)
+
+Templates are expected as `<templatePath>/<template>.<html|text>.hbs`. Template data is augmented with `mailConfig` (from/to/subject for the template) and `dayjs`.
+
+#### Usage
+
+```typescript
+import { createMailer } from '@hikari-systems/hs.utils';
+import path from 'path';
+
+const templatePath = path.join(__dirname, 'templates');
+const mailer = createMailer(templatePath);
+
+// Send a template email
+await mailer.send('welcome', { userName: 'Alice', loginUrl: 'https://example.com/login' });
+
+// Or render only (no send)
+const html = await mailer.renderHtml('welcome', { userName: 'Alice' });
+const options = await mailer.renderOptions('welcome', { userName: 'Alice' });
+```
 
 ### OAuth2 Authentication
 
