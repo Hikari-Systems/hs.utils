@@ -4,6 +4,12 @@ import logging from './logging';
 export { forwardedFor } from './forwardedFor';
 export { config, logging };
 export {
+  createMailer,
+  getMailTransportConfig,
+  MAIL_TRANSPORT_CONFIG_PREFIX,
+} from './mail';
+export type { CreateMailer, MailMessageConfig, MailOptions } from './mail';
+export {
   postgresStoreGetter,
   redisStoreGetter,
   sessionMiddleware,

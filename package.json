@@ -31,9 +31,12 @@
     "dayjs": "^1.11.11",
     "express": "^4.21.0",
     "express-session": "^1.18.0",
+    "handlebars": "^4.7.8",
     "nconf": "^0.12.1",
+    "nodemailer": "^8.0.1",
     "pg": "^8.13.3",
     "redis": "^4.6.14",
+    "resend": "^6.9.2",
     "together-ai": "^0.13.0",
     "uuid": "^10.0.0",
     "winston": "^3.13.0",
@@ -48,6 +51,7 @@
     "@types/jest": "^29.5.12",
     "@types/nconf": "^0.10.6",
     "@types/node": "^22.15.21",
+    "@types/nodemailer": "^6.4.17",
     "@types/pg": "^8.11.10",
     "@types/redis": "^4.0.11",
     "@types/uuid": "^10.0.0",
@@ -73,7 +77,8 @@
     "url": "git+https://github.com/Hikari-Systems/hs-utils.git"
   },
   "overrides": {
-    "langsmith": ">=0.4.6"
+    "langsmith": ">=0.4.6",
+    "fast-xml-parser": ">=5.3.6"
   },
   "keywords": [
     "hikari",

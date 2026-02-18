@@ -1,14 +1,14 @@
-import js from "@eslint/js";
-import prettier from "eslint-plugin-prettier";
-import typescriptEslint from "@typescript-eslint/eslint-plugin";
-import typescriptParser from "@typescript-eslint/parser";
-import _import from "eslint-plugin-import";
-import globals from "globals";
+import js from '@eslint/js';
+import prettier from 'eslint-plugin-prettier';
+import typescriptEslint from '@typescript-eslint/eslint-plugin';
+import typescriptParser from '@typescript-eslint/parser';
+import _import from 'eslint-plugin-import';
+import globals from 'globals';
 
 export default [
   // Global ignores
   {
-    ignores: ["es5/", "static/"],
+    ignores: ['es5/', 'static/'],
   },
   // Base recommended config
   js.configs.recommended,
@@ -26,55 +26,55 @@ export default [
     },
     rules: {
       // Prettier integration
-      "prettier/prettier": ["error"],
+      'prettier/prettier': ['error'],
       // Import rules
-      "import/extensions": "off",
-      "import/prefer-default-export": "off",
-      "import/no-extraneous-dependencies": [
-        "error",
+      'import/extensions': 'off',
+      'import/prefer-default-export': 'off',
+      'import/no-extraneous-dependencies': [
+        'error',
         {
-          devDependencies: ["**/*.test.ts", "**/*.spec.ts"],
+          devDependencies: ['**/*.test.ts', '**/*.spec.ts'],
         },
       ],
       // Best practices (airbnb-style)
-      "no-underscore-dangle": ["warn", { allowAfterThis: true }],
-      "no-await-in-loop": "warn",
-      "no-restricted-syntax": [
-        "error",
+      'no-underscore-dangle': ['warn', { allowAfterThis: true }],
+      'no-await-in-loop': 'warn',
+      'no-restricted-syntax': [
+        'error',
         {
-          selector: "ForInStatement",
+          selector: 'ForInStatement',
           message:
-            "for..in loops iterate over the entire prototype chain, which is virtually never what you want. Use Object.{keys,values,entries}, and iterate over the resulting array.",
+            'for..in loops iterate over the entire prototype chain, which is virtually never what you want. Use Object.{keys,values,entries}, and iterate over the resulting array.',
         },
         {
-          selector: "ForOfStatement",
+          selector: 'ForOfStatement',
           message:
-            "iterators/generators require regenerator-runtime, which is too heavyweight for this guide to allow. However, you can use forEach instead.",
+            'iterators/generators require regenerator-runtime, which is too heavyweight for this guide to allow. However, you can use forEach instead.',
         },
       ],
-      "class-methods-use-this": "warn",
-      "no-continue": "off",
-      camelcase: "off",
+      'class-methods-use-this': 'warn',
+      'no-continue': 'off',
+      camelcase: 'off',
     },
   },
   // TypeScript-specific config
   {
-    files: ["**/*.ts"],
+    files: ['**/*.ts'],
     languageOptions: {
       parser: typescriptParser,
       parserOptions: {
-        ecmaVersion: "latest",
-        sourceType: "module",
+        ecmaVersion: 'latest',
+        sourceType: 'module',
       },
     },
     plugins: {
-      "@typescript-eslint": typescriptEslint,
+      '@typescript-eslint': typescriptEslint,
     },
     settings: {
-      "import/parsers": {
-        "@typescript-eslint/parser": [".ts"],
+      'import/parsers': {
+        '@typescript-eslint/parser': ['.ts'],
       },
-      "import/resolver": {
+      'import/resolver': {
         typescript: {
           alwaysTryTypes: true,
         },
@@ -82,13 +82,13 @@ export default [
     },
     rules: {
       ...typescriptEslint.configs.recommended.rules,
-      "@typescript-eslint/explicit-module-boundary-types": "off",
-      "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unused-vars": [
-        "warn",
+      '@typescript-eslint/explicit-module-boundary-types': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
         {
-          argsIgnorePattern: "^_",
-          varsIgnorePattern: "^_",
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
         },
       ],
     },
