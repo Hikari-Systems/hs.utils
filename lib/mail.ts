@@ -153,6 +153,11 @@ export const createMailer: CreateMailer = (templatePath) => {
     return vars;
   };
 
+  const renderConfigTemplate = (
+    s: string,
+    vars: Record<string, unknown>,
+  ): string => Handlebars.compile(s)(vars).trim();
+
   const loadTemplate = async (
     template: string,
     ext: 'html' | 'text',
@@ -192,6 +197,7 @@ export const createMailer: CreateMailer = (templatePath) => {
     template: string,
     data: Record<string, unknown>,
   ): Promise<MailOptions> => {
+    const vars = addVars(data, template);
     const msg = getMessageConfig(template);
     const defaultFrom = configString('mail:defaultFrom', '');
     const defaultFromName = configString('mail:defaultFromName', '');
@@ -208,15 +214,17 @@ export const createMailer: CreateMailer = (templatePath) => {
           : fromAddress
         : undefined;
 
-    const toAddress = msg.to.trim();
+    const toAddress = renderConfigTemplate(msg.to, vars);
+    const toNameRendered = renderConfigTemplate(msg.toName || '', vars);
     const to: MailOptions['to'] | undefined =
       toAddress !== ''
-        ? msg.toName.trim()
-          ? { name: msg.toName.trim(), address: toAddress }
+        ? toNameRendered !== ''
+          ? { name: toNameRendered, address: toAddress }
           : toAddress
         : undefined;
 
-    const subject = (msg.subject.trim() || defaultSubject).trim();
+    const subjectRendered = renderConfigTemplate(msg.subject, vars);
+    const subject = (subjectRendered !== '' ? subjectRendered : defaultSubject).trim();
     if (!from || !to || !subject) {
       throw new Error(
         `Missing mail:messages:${template} config (from, to, subject required)`,
@@ -244,6 +252,20 @@ export const createMailer: CreateMailer = (templatePath) => {
     data: Record<string, unknown>,
   ): Promise<void> => {
     const mailOptions = await renderOptions(template, data);
+    const fromStr =
+      typeof mailOptions.from === 'string'
+        ? mailOptions.from
+        : `${mailOptions.from.name} <${mailOptions.from.address}>`;
+    const toStr =
+      typeof mailOptions.to === 'string'
+        ? mailOptions.to
+        : `${mailOptions.to.name} <${mailOptions.to.address}>`;
+    const body =
+      (mailOptions.html ?? mailOptions.text ?? '').replace(/\s+/g, ' ').trim();
+    const bodyPreview = body.length > 50 ? `${body.slice(0, 50)}...` : body;
+    log.info(
+      `Sending mail from=${fromStr} to=${toStr} subject=${mailOptions.subject} body=${bodyPreview}`,
+    );
     const payload: nodemailer.SendMailOptions = {
       from: mailOptions.from,
       to: mailOptions.to,
