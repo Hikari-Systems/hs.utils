@@ -224,7 +224,9 @@ export const createMailer: CreateMailer = (templatePath) => {
         : undefined;
 
     const subjectRendered = renderConfigTemplate(msg.subject, vars);
-    const subject = (subjectRendered !== '' ? subjectRendered : defaultSubject).trim();
+    const subject = (
+      subjectRendered !== '' ? subjectRendered : defaultSubject
+    ).trim();
     if (!from || !to || !subject) {
       throw new Error(
         `Missing mail:messages:${template} config (from, to, subject required)`,
@@ -260,8 +262,9 @@ export const createMailer: CreateMailer = (templatePath) => {
       typeof mailOptions.to === 'string'
         ? mailOptions.to
         : `${mailOptions.to.name} <${mailOptions.to.address}>`;
-    const body =
-      (mailOptions.html ?? mailOptions.text ?? '').replace(/\s+/g, ' ').trim();
+    const body = (mailOptions.html ?? mailOptions.text ?? '')
+      .replace(/\s+/g, ' ')
+      .trim();
     const bodyPreview = body.length > 50 ? `${body.slice(0, 50)}...` : body;
     log.info(
       `Sending mail from=${fromStr} to=${toStr} subject=${mailOptions.subject} body=${bodyPreview}`,
