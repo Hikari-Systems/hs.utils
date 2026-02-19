@@ -8,7 +8,7 @@ import config from './config';
 import logging from './logging';
 import dayjs from 'dayjs';
 
-const log = logging('service:mail');
+const log = logging('mail');
 const { configString, configBoolean, configInteger } = config;
 
 /** Config key prefix for transport options (includes trailing colon, e.g. mail:transport:). */
