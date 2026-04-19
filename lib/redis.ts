@@ -1,10 +1,10 @@
-import { createClient, RedisClientType } from 'redis';
+import Redis from 'ioredis';
 import config from './config';
 import logging from './logging';
 
 const log = logging('client:redis');
 
-const getClient = () => {
+const getClient = (): Redis | null => {
   const redisEnabled = (config.get('redis:enabled') || 'true') === 'true';
   if (!redisEnabled) {
     log.warn(
@@ -12,15 +12,14 @@ const getClient = () => {
     );
     return null;
   }
-  return createClient({
-    url: config.get('redis:url'),
-    password: config.get('redis:auth') || undefined,
-  });
+  const url = config.get('redis:url');
+  const password = config.get('redis:auth') || undefined;
+  return new Redis(url, { password });
 };
 
 // hold a promise in module scope, then await the same promise to get the resolved value
 // before using it each time. Assumes these objects are shareable across requests (todo: verify)
-let internalRedisConn: RedisClientType<any, any, any> | null;
+let internalRedisConn: Redis | null;
 
 const ensureRedisConnection = async () => {
   if (!internalRedisConn) {
@@ -31,7 +30,7 @@ const ensureRedisConnection = async () => {
       redisClient.on('ready', () => {
         log.debug('General purpose redis connection available');
       });
-      redisClient.on('error', (e) => {
+      redisClient.on('error', (e: Error) => {
         log.error('Error in general purpose redis connection', e);
       });
       redisClient.on('reconnecting', () => {
@@ -42,7 +41,8 @@ const ensureRedisConnection = async () => {
       redisClient.on('end', () => {
         log.debug('General purpose redis connection is disconnected');
       });
-      internalRedisConn = await redisClient.connect();
+      await redisClient.ping();
+      internalRedisConn = redisClient;
     }
   }
   return internalRedisConn;
@@ -92,20 +92,33 @@ export const delRedisVal = async (key: string): Promise<void> => {
 
 export const healthcheck = () =>
   new Promise<void>((resolve, reject) => {
-    const testClient = getClient();
-    if (!testClient) {
+    const redisEnabled = (config.get('redis:enabled') || 'true') === 'true';
+    if (!redisEnabled) {
       resolve();
-    } else {
-      const errorHandler = (err: Error) => {
-        setTimeout(() => testClient?.disconnect(), 20);
-        reject(new Error(`Redis health check failed: err=${err}`));
-      };
-
-      testClient.on('ready', () => {
-        setTimeout(() => testClient?.disconnect(), 20);
-        resolve();
-      });
-      testClient.on('error', errorHandler);
-      testClient.connect().catch(errorHandler);
+      return;
     }
+    const url = config.get('redis:url');
+    const password = config.get('redis:auth') || undefined;
+    const testClient = new Redis(url, {
+      password,
+      lazyConnect: true,
+    });
+
+    const cleanup = () => {
+      setTimeout(() => {
+        testClient.disconnect();
+      }, 20);
+    };
+
+    const errorHandler = (err: Error) => {
+      cleanup();
+      reject(new Error(`Redis health check failed: err=${err}`));
+    };
+
+    testClient.once('ready', () => {
+      cleanup();
+      resolve();
+    });
+    testClient.once('error', errorHandler);
+    void testClient.connect().catch(errorHandler);
   });

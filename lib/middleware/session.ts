@@ -1,7 +1,7 @@
 import session, { MemoryStore, Store } from 'express-session';
 import RedisStore from 'connect-redis';
 import connectPgSimple, { PGStore } from 'connect-pg-simple';
-import { createClient } from 'redis';
+import Redis from 'ioredis';
 
 import config from '../config';
 import logging from '../logging';
@@ -52,31 +52,62 @@ export const sessionMiddleware =
 // //////// REDIS IMPLEMENTATION - START
 let redisStore: RedisStore | undefined;
 
+const parseSentinelHosts = (hosts: string) =>
+  hosts.split(',').map((h) => {
+    const [sentinelHost, portStr] = h.trim().split(':');
+    return { host: sentinelHost, port: parseInt(portStr || '26379', 10) };
+  });
+
 export const redisStoreGetter: StoreGetter = async () => {
   const url = configString('session:redis:url', '').trim();
-  if (url !== '') {
+  const host = configString('session:redis:host', '').trim();
+  const sentinelHosts = configString('session:redis:sentinel:hosts', '').trim();
+
+  if (url !== '' || host !== '' || sentinelHosts !== '') {
     if (!redisStore) {
-      const redisClient = createClient({
-        url,
-        password: configString('session:redis:auth', undefined),
-      });
-      redisClient.on('ready', () => {
+      const auth = configString('session:redis:auth', '').trim() || undefined;
+      const username =
+        configString('session:redis:username', '').trim() || undefined;
+      const db = parseInt(configString('session:redis:db', '0'), 10) || 0;
+      const prefix = configString('session:prefix', '');
+
+      const ioClient =
+        sentinelHosts !== ''
+          ? new Redis({
+              sentinels: parseSentinelHosts(sentinelHosts),
+              name: configString(
+                'session:redis:sentinel:masterName',
+                'mymaster',
+              ),
+              db,
+              ...(auth && { password: auth }),
+              ...(username && { username }),
+            })
+          : url !== ''
+            ? new Redis(url, { ...(auth && { password: auth }), db })
+            : new Redis({
+                host,
+                port:
+                  parseInt(configString('session:redis:port', '6379'), 10) ||
+                  6379,
+                db,
+                ...(auth && { password: auth }),
+                ...(username && { username }),
+              });
+
+      ioClient.on('ready', () => {
         log.debug('Session redis connection available');
       });
-      redisClient.on('error', (e) => {
+      ioClient.on('error', (e) => {
         log.error('Error in session redis connection', e);
       });
-      redisClient.on('reconnecting', () => {
+      ioClient.on('reconnecting', () => {
         log.debug('Session redis connection interrupted - reconnecting');
       });
-      redisClient.on('end', () => {
+      ioClient.on('end', () => {
         log.debug('Session redis connection is disconnected');
       });
-      const redisConn = await redisClient.connect();
-      redisStore = new RedisStore({
-        client: redisConn,
-        prefix: configString('session:prefix', ''),
-      });
+      redisStore = new RedisStore({ client: ioClient as any, prefix });
     }
 
     if (redisStore) {
