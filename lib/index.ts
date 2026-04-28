@@ -46,4 +46,25 @@ export {
 } from './langchain/stream';
 export { ToolDef, ToolArgumentDef } from './langchain/types';
 
+export type {
+  AuthConfig,
+  VerificationReason,
+  ClientRegistration,
+  ClientStore,
+} from './mcp-auth';
+export {
+  applyMcpAuth,
+  loadAuthConfig,
+  handleProtectedResourceMetadata,
+  handleAuthServerMetadata,
+  asmCache,
+  createTokenVerifier,
+  TokenVerificationError,
+  createMcpAuthMiddleware,
+  createClientStore,
+  createDcrHandler,
+  dcrRateLimit,
+  createCimdHandler,
+} from './mcp-auth';
+
 export * from './types';

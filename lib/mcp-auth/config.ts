@@ -1,0 +1,65 @@
+import config from '../config';
+
+export type AuthConfig = {
+  resourceServerUrl: string;
+  authorizationServerUrl: string;
+  supportedScopes: string[];
+  expectedAudience: string;
+  enableDcr: boolean;
+  jwksUri?: string;
+  clockSkewSeconds: number;
+};
+
+const requiredString = (key: string): string => {
+  const value = config.configString(key, '');
+  if (value === '') {
+    throw new Error(
+      `MCP auth config: required key "${key}" is missing or empty. ` +
+        `Set it in config.json or via env var "${key.replace(/:/g, '__')}".`,
+    );
+  }
+  return value;
+};
+
+const parseScopes = (raw: string): string[] => {
+  const scopes = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (scopes.length === 0) {
+    throw new Error(
+      'MCP auth config: "mcp:auth:supportedScopes" must contain at least ' +
+        'one comma-separated scope.',
+    );
+  }
+  return scopes;
+};
+
+export const loadAuthConfig = (): AuthConfig => {
+  const resourceServerUrl = requiredString('mcp:auth:resourceServerUrl');
+  const expectedAudience = requiredString('mcp:auth:expectedAudience');
+  const supportedScopes = parseScopes(
+    requiredString('mcp:auth:supportedScopes'),
+  );
+  const authorizationServerUrl = config.configString(
+    'oauth2:authorizationServer',
+    'https://sso.hikari-systems.com',
+  );
+  const enableDcr = config.configBoolean('mcp:auth:enableDcr', false);
+  const clockSkewSeconds = config.configInteger(
+    'mcp:auth:clockSkewSeconds',
+    30,
+  );
+  const jwksUriRaw = config.configString('mcp:auth:jwksUri', '');
+  const jwksUri = jwksUriRaw === '' ? undefined : jwksUriRaw;
+
+  return {
+    resourceServerUrl,
+    authorizationServerUrl,
+    supportedScopes,
+    expectedAudience,
+    enableDcr,
+    jwksUri,
+    clockSkewSeconds,
+  };
+};
