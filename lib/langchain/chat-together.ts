@@ -113,7 +113,7 @@ export class ChatHSTogetherAI extends SimpleChatModel<ChatHSTogetherAICallOption
     AIMessageChunk,
     ChatHSTogetherAICallOptions
   > {
-    return this.bind({
+    return this.withConfig({
       tools: tools.map((tool) => convertToOpenAITool(tool)),
       ...kwargs,
     } as Partial<ChatHSTogetherAICallOptions>);
