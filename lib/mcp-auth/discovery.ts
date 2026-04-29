@@ -1,7 +1,18 @@
 import { RequestHandler } from 'express';
 import logging from '../logging';
+import { forwardedFor } from '../forwardedFor';
 import { AuthConfig } from './config';
 import { AsmCache, createAsmCache } from './stores';
+
+// Normalize a resource sub-path to the form '' or '/foo' (no trailing slash).
+// '' represents a resource at the host root.
+export const normalizeResourcePath = (raw: string | undefined): string => {
+  if (!raw) return '';
+  const trimmed = raw.trim();
+  if (trimmed === '' || trimmed === '/') return '';
+  const withLeading = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return withLeading.replace(/\/+$/, '');
+};
 
 const log = logging('mcp-auth');
 
@@ -39,12 +50,19 @@ const sanitizeAsm = (raw: unknown): Record<string, unknown> => {
   return out;
 };
 
+// RFC 9728 PRM. The `resource` field is derived from the inbound request's
+// forwarded host so discovery works behind reverse proxies and tunnels
+// (ngrok, cloud LBs, etc.) without rewriting config. `resourcePath` is the
+// sub-path the protected resource is mounted at (e.g. '/mcp'); pass '' when
+// the resource is the host root.
 export const handleProtectedResourceMetadata =
-  (config: AuthConfig): RequestHandler =>
-  (_req, res) => {
+  (config: AuthConfig, resourcePath: string = ''): RequestHandler =>
+  (req, res) => {
+    const path = normalizeResourcePath(resourcePath);
+    const { baseUrl } = forwardedFor(req);
     res.setHeader('Content-Type', 'application/json');
     res.status(200).json({
-      resource: config.resourceServerUrl,
+      resource: `${baseUrl}${path}`,
       authorization_servers: [config.authorizationServerUrl],
       scopes_supported: config.supportedScopes,
       bearer_methods_supported: ['header'],

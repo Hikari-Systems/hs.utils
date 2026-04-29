@@ -17,21 +17,42 @@ const baseConfig: AuthConfig = {
 };
 
 describe('handleProtectedResourceMetadata', () => {
-  it('returns the canonical PRM body shape', async () => {
+  it('derives the resource URL from the inbound host (default resourcePath)', async () => {
     const app = express();
+    app.set('trust proxy', true);
     app.get(
       '/.well-known/oauth-protected-resource',
       handleProtectedResourceMetadata(baseConfig),
     );
-    const res = await request(app).get('/.well-known/oauth-protected-resource');
+    const res = await request(app)
+      .get('/.well-known/oauth-protected-resource')
+      .set('Host', 'tunnel.example.com')
+      .set('X-Forwarded-Proto', 'https')
+      .set('X-Forwarded-Host', 'tunnel.example.com');
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/application\/json/);
     expect(res.body).toEqual({
-      resource: 'https://rs.example',
+      resource: 'https://tunnel.example.com',
       authorization_servers: ['https://as.example'],
       scopes_supported: ['mcp:read', 'mcp:write'],
       bearer_methods_supported: ['header'],
     });
+  });
+
+  it('appends resourcePath to the dynamic resource URL', async () => {
+    const app = express();
+    app.set('trust proxy', true);
+    app.get(
+      '/.well-known/oauth-protected-resource/mcp',
+      handleProtectedResourceMetadata(baseConfig, '/mcp'),
+    );
+    const res = await request(app)
+      .get('/.well-known/oauth-protected-resource/mcp')
+      .set('Host', 'tunnel.example.com')
+      .set('X-Forwarded-Proto', 'https')
+      .set('X-Forwarded-Host', 'tunnel.example.com');
+    expect(res.status).toBe(200);
+    expect(res.body.resource).toBe('https://tunnel.example.com/mcp');
   });
 });
 

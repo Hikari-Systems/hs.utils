@@ -1,20 +1,28 @@
-import { RequestHandler } from 'express';
+import { Request, RequestHandler } from 'express';
+import { forwardedFor } from '../forwardedFor';
 import { AuthConfig } from './config';
+import { normalizeResourcePath } from './discovery';
 import { createTokenVerifier, TokenVerificationError } from './tokenVerifier';
 import { JwksCache, createJwksCache } from './stores';
 
-const buildWwwAuthenticate = (config: AuthConfig): string =>
-  `Bearer realm="${config.resourceServerUrl}", ` +
-  `resource_metadata="${config.resourceServerUrl}/.well-known/oauth-protected-resource"`;
+const buildWwwAuthenticate = (req: Request, resourcePath: string): string => {
+  const { baseUrl } = forwardedFor(req);
+  return (
+    `Bearer realm="${baseUrl}${resourcePath}", ` +
+    `resource_metadata="${baseUrl}/.well-known/oauth-protected-resource${resourcePath}"`
+  );
+};
 
 export const createMcpAuthMiddleware = (
   config: AuthConfig,
   jwks: JwksCache = createJwksCache(),
+  resourcePath: string = '',
 ): RequestHandler => {
   const verify = createTokenVerifier(config, jwks);
-  const wwwAuth = buildWwwAuthenticate(config);
+  const path = normalizeResourcePath(resourcePath);
 
   return async (req, res, next) => {
+    const wwwAuth = buildWwwAuthenticate(req, path);
     if (req.path.startsWith('/.well-known/')) {
       next();
       return;

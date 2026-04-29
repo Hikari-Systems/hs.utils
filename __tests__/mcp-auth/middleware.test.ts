@@ -108,16 +108,41 @@ describe('createMcpAuthMiddleware', () => {
     expect(res.body).toEqual({ ok: 'public' });
   });
 
-  it('returns 401 with WWW-Authenticate when Authorization header is absent', async () => {
-    const res = await request(buildApp()).get('/mcp');
+  it('returns 401 with dynamic WWW-Authenticate when Authorization header is absent', async () => {
+    const app = buildApp();
+    app.set('trust proxy', true);
+    const res = await request(app)
+      .get('/mcp')
+      .set('Host', 'tunnel.example.com')
+      .set('X-Forwarded-Proto', 'https')
+      .set('X-Forwarded-Host', 'tunnel.example.com');
     expect(res.status).toBe(401);
     expect(res.headers['www-authenticate']).toMatch(
-      /^Bearer realm="https:\/\/rs\.example"/,
+      /^Bearer realm="https:\/\/tunnel\.example\.com"/,
     );
     expect(res.headers['www-authenticate']).toMatch(
-      /resource_metadata="https:\/\/rs\.example\/\.well-known\/oauth-protected-resource"/,
+      /resource_metadata="https:\/\/tunnel\.example\.com\/\.well-known\/oauth-protected-resource"/,
     );
     expect(res.body.error).toBe('invalid_token');
+  });
+
+  it('uses resourcePath in the WWW-Authenticate realm and metadata URL', async () => {
+    const app = express();
+    app.set('trust proxy', true);
+    app.use(createMcpAuthMiddleware(config, createJwksCache(), '/mcp'));
+    app.get('/mcp', (_req, res) => res.json({ ok: true }));
+    const res = await request(app)
+      .get('/mcp')
+      .set('Host', 'tunnel.example.com')
+      .set('X-Forwarded-Proto', 'https')
+      .set('X-Forwarded-Host', 'tunnel.example.com');
+    expect(res.status).toBe(401);
+    expect(res.headers['www-authenticate']).toMatch(
+      /^Bearer realm="https:\/\/tunnel\.example\.com\/mcp"/,
+    );
+    expect(res.headers['www-authenticate']).toMatch(
+      /resource_metadata="https:\/\/tunnel\.example\.com\/\.well-known\/oauth-protected-resource\/mcp"/,
+    );
   });
 
   it('returns 401 with descriptive body for an expired token', async () => {
