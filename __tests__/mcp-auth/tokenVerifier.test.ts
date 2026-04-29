@@ -3,9 +3,9 @@ import { AddressInfo } from 'net';
 import { SignJWT, generateKeyPair, exportJWK, KeyLike, JWK } from 'jose';
 import {
   TokenVerificationError,
-  resetVerifierCachesForTests,
   createTokenVerifier,
 } from '../../lib/mcp-auth/tokenVerifier';
+import { createJwksCache } from '../../lib/mcp-auth/stores';
 import { AuthConfig } from '../../lib/mcp-auth/config';
 
 type Keys = {
@@ -75,7 +75,6 @@ describe('createTokenVerifier', () => {
   });
 
   beforeEach(() => {
-    resetVerifierCachesForTests();
     config = {
       resourceServerUrl: 'https://rs.example',
       authorizationServerUrl: 'https://as.example',
@@ -97,7 +96,7 @@ describe('createTokenVerifier', () => {
         expSecondsFromNow: 60,
       },
     );
-    const verify = createTokenVerifier(config);
+    const verify = createTokenVerifier(config, createJwksCache());
     const payload = await verify(token);
     expect(payload.sub).toBe('user-1');
     expect(payload.aud).toBe('https://rs.example');
@@ -113,7 +112,7 @@ describe('createTokenVerifier', () => {
         expSecondsFromNow: -120,
       },
     );
-    const verify = createTokenVerifier(config);
+    const verify = createTokenVerifier(config, createJwksCache());
     await expect(verify(token)).rejects.toMatchObject({
       name: 'TokenVerificationError',
       reason: 'expired',
@@ -130,7 +129,7 @@ describe('createTokenVerifier', () => {
         expSecondsFromNow: 60,
       },
     );
-    const verify = createTokenVerifier(config);
+    const verify = createTokenVerifier(config, createJwksCache());
     await expect(verify(token)).rejects.toMatchObject({
       name: 'TokenVerificationError',
       reason: 'wrong_audience',
@@ -138,7 +137,7 @@ describe('createTokenVerifier', () => {
   });
 
   it('throws TokenVerificationError(reason="malformed") for non-JWT input', async () => {
-    const verify = createTokenVerifier(config);
+    const verify = createTokenVerifier(config, createJwksCache());
     await expect(verify('not-a-jwt')).rejects.toMatchObject({
       name: 'TokenVerificationError',
       reason: 'malformed',
@@ -146,7 +145,7 @@ describe('createTokenVerifier', () => {
   });
 
   it('throws TokenVerificationError(reason="malformed") for empty string', async () => {
-    const verify = createTokenVerifier(config);
+    const verify = createTokenVerifier(config, createJwksCache());
     await expect(verify('')).rejects.toBeInstanceOf(TokenVerificationError);
   });
 });

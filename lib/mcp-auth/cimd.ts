@@ -1,12 +1,12 @@
 import { RequestHandler } from 'express';
-import { ClientStore } from './dcr';
+import { ClientStore } from './stores';
 
 export const createCimdHandler =
   (store: ClientStore): RequestHandler =>
-  (req, res) => {
+  async (req, res) => {
     const clientId = req.params.client_id;
     const registration =
-      typeof clientId === 'string' ? store.get(clientId) : undefined;
+      typeof clientId === 'string' ? await store.get(clientId) : undefined;
     res.setHeader('Content-Type', 'application/json');
     if (!registration) {
       res.status(404).json({

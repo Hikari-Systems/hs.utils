@@ -1,6 +1,7 @@
 import { RequestHandler } from 'express';
 import logging from '../logging';
 import { AuthConfig } from './config';
+import { AsmCache, createAsmCache } from './stores';
 
 const log = logging('mcp-auth');
 
@@ -29,10 +30,6 @@ const ASM_FIELD_ALLOWLIST = new Set<string>([
 
 const ASM_CACHE_TTL_MS = 5 * 60 * 1000;
 
-type AsmCacheEntry = { fetchedAt: number; body: Record<string, unknown> };
-
-export const asmCache = new Map<string, AsmCacheEntry>();
-
 const sanitizeAsm = (raw: unknown): Record<string, unknown> => {
   if (!raw || typeof raw !== 'object') return {};
   const out: Record<string, unknown> = {};
@@ -55,17 +52,17 @@ export const handleProtectedResourceMetadata =
   };
 
 export const handleAuthServerMetadata =
-  (config: AuthConfig): RequestHandler =>
+  (config: AuthConfig, cache: AsmCache = createAsmCache()): RequestHandler =>
   async (_req, res) => {
     const upstream = `${config.authorizationServerUrl.replace(
       /\/+$/,
       '',
     )}/.well-known/oauth-authorization-server`;
 
-    const cached = asmCache.get(upstream);
-    if (cached && Date.now() - cached.fetchedAt < ASM_CACHE_TTL_MS) {
+    const cached = await cache.get(upstream, ASM_CACHE_TTL_MS);
+    if (cached) {
       res.setHeader('Content-Type', 'application/json');
-      res.status(200).json(cached.body);
+      res.status(200).json(cached);
       return;
     }
 
@@ -105,7 +102,7 @@ export const handleAuthServerMetadata =
       );
     }
 
-    asmCache.set(upstream, { fetchedAt: Date.now(), body: sanitized });
+    await cache.set(upstream, sanitized);
 
     res.setHeader('Content-Type', 'application/json');
     res.status(200).json(sanitized);

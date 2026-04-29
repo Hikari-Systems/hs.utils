@@ -1,40 +1,19 @@
 import express, { RequestHandler } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { AuthConfig } from './config';
+import {
+  ClientRegistration,
+  ClientStore,
+  DcrRateLimitStore,
+  createClientStore,
+  createDcrRateLimitStore,
+} from './stores';
 
-export type ClientRegistration = {
-  client_id: string;
-  client_id_issued_at: number;
-  redirect_uris: string[];
-  grant_types: string[];
-  response_types: string[];
-  token_endpoint_auth_method: string;
-};
-
-export type ClientStore = {
-  get(id: string): ClientRegistration | undefined;
-  set(id: string, reg: ClientRegistration): void;
-};
-
-export const createClientStore = (): ClientStore => {
-  // TODO: replace with persistent store before production
-  const store = new Map<string, ClientRegistration>();
-  return {
-    get: (id) => store.get(id),
-    set: (id, reg) => {
-      store.set(id, reg);
-    },
-  };
-};
+export type { ClientRegistration, ClientStore, DcrRateLimitStore };
+export { createClientStore, createDcrRateLimitStore };
 
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX = 5;
-
-export const dcrRateLimit = new Map<string, number[]>();
-
-export const resetDcrRateLimitForTests = (): void => {
-  dcrRateLimit.clear();
-};
 
 const isAcceptableRedirectUri = (uri: string): boolean => {
   let parsed: URL;
@@ -48,20 +27,6 @@ const isAcceptableRedirectUri = (uri: string): boolean => {
     return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
   }
   return false;
-};
-
-const recordAndCheckRate = (ip: string): boolean => {
-  const now = Date.now();
-  const window = (dcrRateLimit.get(ip) ?? []).filter(
-    (t) => now - t < RATE_LIMIT_WINDOW_MS,
-  );
-  if (window.length >= RATE_LIMIT_MAX) {
-    dcrRateLimit.set(ip, window);
-    return false;
-  }
-  window.push(now);
-  dcrRateLimit.set(ip, window);
-  return true;
 };
 
 const jsonError = (
@@ -81,10 +46,19 @@ const jsonError = (
 };
 
 export const createDcrHandler =
-  (_config: AuthConfig, store: ClientStore): RequestHandler =>
-  (req, res) => {
+  (
+    _config: AuthConfig,
+    store: ClientStore,
+    rateLimit: DcrRateLimitStore,
+  ): RequestHandler =>
+  async (req, res) => {
     const ip = req.ip ?? req.socket.remoteAddress ?? 'unknown';
-    if (!recordAndCheckRate(ip)) {
+    const allowed = await rateLimit.recordAndCheck(
+      ip,
+      RATE_LIMIT_WINDOW_MS,
+      RATE_LIMIT_MAX,
+    );
+    if (!allowed) {
       jsonError(
         res,
         429,
@@ -142,7 +116,7 @@ export const createDcrHandler =
       response_types: ['code'],
       token_endpoint_auth_method: 'none',
     };
-    store.set(clientId, registration);
+    await store.set(clientId, registration);
 
     res.setHeader('Content-Type', 'application/json');
     res.status(201).json(registration);

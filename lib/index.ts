@@ -47,24 +47,37 @@ export {
 export { ToolDef, ToolArgumentDef } from './langchain/types';
 
 export type {
+  AsmCache,
+  AsmCacheBody,
   AuthConfig,
-  VerificationReason,
   ClientRegistration,
   ClientStore,
+  DcrRateLimitStore,
+  JsonWebKeySet,
+  JwksCache,
+  JwksCacheEntry,
+  McpAuthStores,
+  McpDataServiceOpts,
+  VerificationReason,
 } from './mcp-auth';
 export {
   applyMcpAuth,
-  loadAuthConfig,
-  handleProtectedResourceMetadata,
-  handleAuthServerMetadata,
-  asmCache,
-  createTokenVerifier,
-  TokenVerificationError,
-  createMcpAuthMiddleware,
-  createClientStore,
-  createDcrHandler,
-  dcrRateLimit,
+  createAsmCache,
   createCimdHandler,
+  createClientStore,
+  createDbAsmCache,
+  createDbClientStore,
+  createDbDcrRateLimitStore,
+  createDbJwksCache,
+  createDcrHandler,
+  createDcrRateLimitStore,
+  createJwksCache,
+  createMcpAuthMiddleware,
+  createTokenVerifier,
+  handleAuthServerMetadata,
+  handleProtectedResourceMetadata,
+  loadAuthConfig,
+  TokenVerificationError,
 } from './mcp-auth';
 
 export * from './types';

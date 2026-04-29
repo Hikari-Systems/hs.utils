@@ -1,9 +1,9 @@
 import express from 'express';
 import request from 'supertest';
 import {
-  resetDcrRateLimitForTests,
   createClientStore,
   createDcrHandler,
+  createDcrRateLimitStore,
 } from '../../lib/mcp-auth/dcr';
 import { AuthConfig } from '../../lib/mcp-auth/config';
 
@@ -19,15 +19,16 @@ const baseConfig: AuthConfig = {
 const buildApp = () => {
   const app = express();
   const store = createClientStore();
-  app.post('/register', express.json(), createDcrHandler(baseConfig, store));
+  const rateLimit = createDcrRateLimitStore();
+  app.post(
+    '/register',
+    express.json(),
+    createDcrHandler(baseConfig, store, rateLimit),
+  );
   return { app, store };
 };
 
 describe('createDcrHandler', () => {
-  beforeEach(() => {
-    resetDcrRateLimitForTests();
-  });
-
   it('rejects non-localhost http:// redirect URIs with 400 invalid_redirect_uri', async () => {
     const { app } = buildApp();
     const res = await request(app)
@@ -49,7 +50,7 @@ describe('createDcrHandler', () => {
     expect(res.body.response_types).toEqual(['code']);
     expect(res.body.token_endpoint_auth_method).toBe('none');
     expect(typeof res.body.client_id_issued_at).toBe('number');
-    expect(store.get(res.body.client_id)).toBeDefined();
+    expect(await store.get(res.body.client_id)).toBeDefined();
   });
 
   it('accepts http://localhost redirect URIs (dev exception)', async () => {

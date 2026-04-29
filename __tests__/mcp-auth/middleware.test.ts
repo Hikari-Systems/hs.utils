@@ -4,7 +4,7 @@ import express from 'express';
 import request from 'supertest';
 import { SignJWT, generateKeyPair, exportJWK, KeyLike, JWK } from 'jose';
 import { createMcpAuthMiddleware } from '../../lib/mcp-auth/middleware';
-import { resetVerifierCachesForTests } from '../../lib/mcp-auth/tokenVerifier';
+import { createJwksCache } from '../../lib/mcp-auth/stores';
 import { AuthConfig } from '../../lib/mcp-auth/config';
 
 type Keys = { privateKey: KeyLike; publicJwk: JWK; kid: string };
@@ -74,7 +74,6 @@ describe('createMcpAuthMiddleware', () => {
   });
 
   beforeEach(() => {
-    resetVerifierCachesForTests();
     config = {
       resourceServerUrl: 'https://rs.example',
       authorizationServerUrl: 'https://as.example',
@@ -91,7 +90,7 @@ describe('createMcpAuthMiddleware', () => {
     app.get('/.well-known/oauth-protected-resource', (_req, res) =>
       res.json({ ok: 'public' }),
     );
-    app.use(createMcpAuthMiddleware(config));
+    app.use(createMcpAuthMiddleware(config, createJwksCache()));
     app.get('/mcp', (req, res) =>
       res.json({
         ok: true,

@@ -1,10 +1,10 @@
 import express from 'express';
 import request from 'supertest';
 import {
-  asmCache,
   handleAuthServerMetadata,
   handleProtectedResourceMetadata,
 } from '../../lib/mcp-auth/discovery';
+import { createAsmCache } from '../../lib/mcp-auth/stores';
 import { AuthConfig } from '../../lib/mcp-auth/config';
 
 const baseConfig: AuthConfig = {
@@ -40,7 +40,6 @@ describe('handleAuthServerMetadata', () => {
 
   afterEach(() => {
     globalThis.fetch = realFetch;
-    asmCache.clear();
   });
 
   it('strips fields outside the RFC 8414 §2 allowlist', async () => {
@@ -65,7 +64,7 @@ describe('handleAuthServerMetadata', () => {
     const app = express();
     app.get(
       '/.well-known/oauth-authorization-server',
-      handleAuthServerMetadata(baseConfig),
+      handleAuthServerMetadata(baseConfig, createAsmCache()),
     );
     const res = await request(app).get(
       '/.well-known/oauth-authorization-server',
@@ -95,9 +94,10 @@ describe('handleAuthServerMetadata', () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     const app = express();
+    const cache = createAsmCache();
     app.get(
       '/.well-known/oauth-authorization-server',
-      handleAuthServerMetadata(baseConfig),
+      handleAuthServerMetadata(baseConfig, cache),
     );
 
     await request(app).get('/.well-known/oauth-authorization-server');
@@ -114,7 +114,7 @@ describe('handleAuthServerMetadata', () => {
     const app = express();
     app.get(
       '/.well-known/oauth-authorization-server',
-      handleAuthServerMetadata(baseConfig),
+      handleAuthServerMetadata(baseConfig, createAsmCache()),
     );
     const res = await request(app).get(
       '/.well-known/oauth-authorization-server',

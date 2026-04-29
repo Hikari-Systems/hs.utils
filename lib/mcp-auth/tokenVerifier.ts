@@ -1,10 +1,11 @@
 import {
-  createRemoteJWKSet,
+  createLocalJWKSet,
   jwtVerify,
   errors as joseErrors,
   JWTPayload,
 } from 'jose';
 import { AuthConfig } from './config';
+import { JwksCache, JsonWebKeySet, createJwksCache } from './stores';
 
 export type VerificationReason =
   | 'expired'
@@ -23,49 +24,44 @@ export class TokenVerificationError extends Error {
   }
 }
 
-const jwksUriCache = new Map<string, string>();
-
-const resolveJwksUri = async (config: AuthConfig): Promise<string> => {
-  if (config.jwksUri) return config.jwksUri;
-
-  const cached = jwksUriCache.get(config.authorizationServerUrl);
-  if (cached) return cached;
-
-  const upstream = `${config.authorizationServerUrl.replace(
-    /\/+$/,
-    '',
-  )}/.well-known/oauth-authorization-server`;
-  const response = await fetch(upstream, {
+const fetchJson = async (url: string): Promise<unknown> => {
+  const response = await fetch(url, {
     headers: { Accept: 'application/json' },
   });
   if (!response.ok) {
     throw new TokenVerificationError(
       'unknown',
-      `Could not discover jwks_uri from ${upstream}: HTTP ${response.status}`,
+      `HTTP ${response.status} fetching ${url}`,
     );
   }
-  const meta = (await response.json()) as { jwks_uri?: unknown };
+  return response.json();
+};
+
+const discoverJwksUri = async (config: AuthConfig): Promise<string> => {
+  if (config.jwksUri) return config.jwksUri;
+  const upstream = `${config.authorizationServerUrl.replace(
+    /\/+$/,
+    '',
+  )}/.well-known/oauth-authorization-server`;
+  const meta = (await fetchJson(upstream)) as { jwks_uri?: unknown };
   if (typeof meta.jwks_uri !== 'string' || meta.jwks_uri === '') {
     throw new TokenVerificationError(
       'unknown',
       `Authorization server metadata at ${upstream} did not include a jwks_uri.`,
     );
   }
-  jwksUriCache.set(config.authorizationServerUrl, meta.jwks_uri);
   return meta.jwks_uri;
 };
 
-const jwksCache = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
-
-const getJwks = async (
-  config: AuthConfig,
-): Promise<ReturnType<typeof createRemoteJWKSet>> => {
-  const uri = await resolveJwksUri(config);
-  const existing = jwksCache.get(uri);
-  if (existing) return existing;
-  const jwks = createRemoteJWKSet(new URL(uri));
-  jwksCache.set(uri, jwks);
-  return jwks;
+const fetchJwks = async (jwksUri: string): Promise<JsonWebKeySet> => {
+  const body = (await fetchJson(jwksUri)) as { keys?: unknown };
+  if (!body || typeof body !== 'object' || !Array.isArray(body.keys)) {
+    throw new TokenVerificationError(
+      'unknown',
+      `JWKS at ${jwksUri} did not contain a "keys" array.`,
+    );
+  }
+  return body as JsonWebKeySet;
 };
 
 const mapJoseError = (err: unknown): TokenVerificationError => {
@@ -104,14 +100,29 @@ const mapJoseError = (err: unknown): TokenVerificationError => {
 };
 
 export const createTokenVerifier =
-  (config: AuthConfig) =>
+  (config: AuthConfig, cache: JwksCache = createJwksCache()) =>
   async (token: string): Promise<JWTPayload> => {
     if (typeof token !== 'string' || token.length === 0) {
       throw new TokenVerificationError('malformed', 'Empty token');
     }
-    const jwks = await getJwks(config);
+
+    const cached = await cache.get(config.authorizationServerUrl);
+    let jwksDoc: JsonWebKeySet;
+    let jwksUri: string;
+    if (cached) {
+      ({ jwks: jwksDoc, jwksUri } = cached);
+    } else {
+      jwksUri = await discoverJwksUri(config);
+      jwksDoc = await fetchJwks(jwksUri);
+      await cache.set(config.authorizationServerUrl, jwksUri, jwksDoc);
+    }
+
+    const keySet = createLocalJWKSet(
+      jwksDoc as unknown as Parameters<typeof createLocalJWKSet>[0],
+    );
+
     try {
-      const { payload } = await jwtVerify(token, jwks, {
+      const { payload } = await jwtVerify(token, keySet, {
         issuer: config.authorizationServerUrl,
         audience: config.expectedAudience,
         clockTolerance: config.clockSkewSeconds,
@@ -121,8 +132,3 @@ export const createTokenVerifier =
       throw mapJoseError(err);
     }
   };
-
-export const resetVerifierCachesForTests = (): void => {
-  jwksUriCache.clear();
-  jwksCache.clear();
-};

@@ -1,13 +1,17 @@
 import { RequestHandler } from 'express';
 import { AuthConfig } from './config';
 import { createTokenVerifier, TokenVerificationError } from './tokenVerifier';
+import { JwksCache, createJwksCache } from './stores';
 
 const buildWwwAuthenticate = (config: AuthConfig): string =>
   `Bearer realm="${config.resourceServerUrl}", ` +
   `resource_metadata="${config.resourceServerUrl}/.well-known/oauth-protected-resource"`;
 
-export const createMcpAuthMiddleware = (config: AuthConfig): RequestHandler => {
-  const verify = createTokenVerifier(config);
+export const createMcpAuthMiddleware = (
+  config: AuthConfig,
+  jwks: JwksCache = createJwksCache(),
+): RequestHandler => {
+  const verify = createTokenVerifier(config, jwks);
   const wwwAuth = buildWwwAuthenticate(config);
 
   return async (req, res, next) => {
