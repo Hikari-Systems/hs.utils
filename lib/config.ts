@@ -20,10 +20,10 @@ const get = (key: string) => {
 
 const getAllKeys = (): string[] => Object.keys(config.get());
 
-const configString = (key: string, defaultValue: string = ''): string =>
+const configString = (key: string, defaultValue = ''): string =>
   String(get(key) ?? defaultValue).trim();
 
-const configInteger = (key: string, defaultValue: number = 0): number => {
+const configInteger = (key: string, defaultValue = 0): number => {
   if (Number.isNaN(defaultValue) || !Number.isInteger(defaultValue)) {
     throw new Error(
       `Config "${key}": invalid default integer value "${defaultValue}"`,
@@ -38,7 +38,7 @@ const configInteger = (key: string, defaultValue: number = 0): number => {
   return parsed;
 };
 
-const configBoolean = (key: string, defaultValue: boolean = false): boolean => {
+const configBoolean = (key: string, defaultValue = false): boolean => {
   if (typeof defaultValue !== 'boolean') {
     throw new Error(
       `Config "${key}": invalid default boolean value "${defaultValue}"`,
@@ -54,7 +54,7 @@ const configBoolean = (key: string, defaultValue: boolean = false): boolean => {
   throw new Error(`Config "${key}": invalid boolean value "${raw}"`);
 };
 
-const configFloat = (key: string, defaultValue: number = 0): number => {
+const configFloat = (key: string, defaultValue = 0): number => {
   if (Number.isNaN(defaultValue)) {
     throw new Error(
       `Config "${key}": invalid default float value "${defaultValue}"`,
