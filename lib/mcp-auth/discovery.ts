@@ -14,6 +14,12 @@ export const normalizeResourcePath = (raw: string | undefined): string => {
   return withLeading.replace(/\/+$/, '');
 };
 
+// Strip trailing slashes for use as a base URL clients will concatenate paths
+// onto. We must NOT use this when matching `iss` claims, since some IdPs
+// (Auth0) issue tokens whose `iss` carries a trailing slash and `jose` does
+// exact-string comparison.
+const trimTrailingSlash = (url: string): string => url.replace(/\/+$/, '');
+
 const log = logging('mcp-auth');
 
 const ASM_FIELD_ALLOWLIST = new Set<string>([
@@ -63,7 +69,7 @@ export const handleProtectedResourceMetadata =
     res.setHeader('Content-Type', 'application/json');
     res.status(200).json({
       resource: `${baseUrl}${path}`,
-      authorization_servers: [config.authorizationServerUrl],
+      authorization_servers: [trimTrailingSlash(config.authorizationServerUrl)],
       scopes_supported: config.supportedScopes,
       bearer_methods_supported: ['header'],
     });

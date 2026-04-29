@@ -121,9 +121,18 @@ export const createTokenVerifier =
       jwksDoc as unknown as Parameters<typeof createLocalJWKSet>[0],
     );
 
+    // Accept iss with or without a trailing slash. Some IdPs (Auth0) issue
+    // tokens whose iss includes a trailing slash regardless of how the
+    // authorization server URL is configured here, and `jose` does exact
+    // string matching.
+    const issWithSlash = config.authorizationServerUrl.endsWith('/')
+      ? config.authorizationServerUrl
+      : `${config.authorizationServerUrl}/`;
+    const issWithoutSlash = issWithSlash.replace(/\/+$/, '');
+
     try {
       const { payload } = await jwtVerify(token, keySet, {
-        issuer: config.authorizationServerUrl,
+        issuer: [issWithSlash, issWithoutSlash],
         audience: config.expectedAudience,
         clockTolerance: config.clockSkewSeconds,
       });
