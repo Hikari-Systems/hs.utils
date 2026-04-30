@@ -16,6 +16,7 @@ import {
   createDbDcrRateLimitStore,
   createDbJwksCache,
 } from './dbStores';
+import type { McpUserResolver } from './userResolution';
 
 export type { AuthConfig } from './config';
 export { loadAuthConfig } from './config';
@@ -47,7 +48,14 @@ export {
   createJwksCache,
 } from './stores';
 
+export type { McpAuthInfo } from './types';
 export type { McpDataServiceOpts } from './dbStores';
+export type {
+  McpResolvedUser,
+  McpUserResolver,
+  McpUserResolutionOptions,
+} from './userResolution';
+export { createOidcUserResolver } from './userResolution';
 export {
   createDbAsmCache,
   createDbClientStore,
@@ -67,6 +75,13 @@ export type McpAuthOptions = McpAuthStores & {
   // register the RFC 9728 path-suffix PRM URL and to advertise the correct
   // `resource` and `resource_metadata` values. Defaults to '' (host root).
   resourcePath?: string;
+  // Optional. After token verification, look up / create the local user
+  // record by hitting the IdP's /userinfo endpoint and upserting via
+  // consumer-supplied callbacks. The resolved {userId, profile} is merged
+  // into req.auth.extra so MCP tool handlers see it as
+  // `extra.authInfo.extra.userId` / `extra.authInfo.extra.profile`. Use
+  // `createOidcUserResolver` for the standard impl.
+  userResolver?: McpUserResolver;
 };
 
 export const applyMcpAuth = (
@@ -110,5 +125,7 @@ export const applyMcpAuth = (
     );
   }
 
-  app.use(createMcpAuthMiddleware(config, jwks, resourcePath));
+  app.use(
+    createMcpAuthMiddleware(config, jwks, resourcePath, options.userResolver),
+  );
 };

@@ -56,8 +56,12 @@ export type {
   JsonWebKeySet,
   JwksCache,
   JwksCacheEntry,
+  McpAuthInfo,
   McpAuthStores,
   McpDataServiceOpts,
+  McpResolvedUser,
+  McpUserResolver,
+  McpUserResolutionOptions,
   VerificationReason,
 } from './mcp-auth';
 export {
@@ -73,6 +77,7 @@ export {
   createDcrRateLimitStore,
   createJwksCache,
   createMcpAuthMiddleware,
+  createOidcUserResolver,
   createTokenVerifier,
   handleAuthServerMetadata,
   handleProtectedResourceMetadata,
