@@ -1,6 +1,7 @@
 import { Request, RequestHandler } from 'express';
 import type { JWTPayload } from 'jose';
 import { forwardedFor } from '../forwardedFor';
+import { PostLoginAction, runPostLoginActions } from '../postLoginActions';
 import { AuthConfig } from './config';
 import { normalizeResourcePath } from './discovery';
 import { createTokenVerifier, TokenVerificationError } from './tokenVerifier';
@@ -69,6 +70,7 @@ export const createMcpAuthMiddleware = (
   jwks: JwksCache = createJwksCache(),
   resourcePath: string = '',
   resolveUser?: McpUserResolver,
+  postLoginActions: PostLoginAction[] = [],
 ): RequestHandler => {
   const verify = createTokenVerifier(config, jwks);
   const path = normalizeResourcePath(resourcePath);
@@ -121,6 +123,12 @@ export const createMcpAuthMiddleware = (
             userId: resolved.userId,
             profile: resolved.profile,
           };
+
+          await runPostLoginActions(postLoginActions, {
+            accessToken: token,
+            profile: resolved.profile,
+            userId: resolved.userId,
+          });
         }
       }
       next();

@@ -6,6 +6,7 @@ import config from './config';
 import logging from './logging';
 import { LocalNextFunction, LocalRequest, LocalResponse } from './types';
 import { forwardedFor } from './forwardedFor';
+import { PostLoginAction, runPostLoginActions } from './postLoginActions';
 
 const log = logging('middleware:authentication');
 
@@ -260,6 +261,11 @@ export interface AuthorizeMiddlewareProps<
   stateStore: RedirectStore;
   callbackErrorHandler: ERROR_HANDLER_TYPE;
   callbackUri: string;
+  // Optional. Side-effects to run once the user has been resolved at the
+  // end of the OAuth callback (image upload, audit log, etc.). See
+  // ./postLoginActions for the contract. Actions are parallelised and
+  // their errors are swallowed.
+  postLoginActions?: PostLoginAction[];
 }
 
 export const authorizeMiddleware = <
@@ -275,6 +281,7 @@ export const authorizeMiddleware = <
   stateStore = getSessionRedirectStore(),
   callbackErrorHandler = DEFAULT_ERROR_HANDLER(400),
   callbackUri = '/oauth2/callback',
+  postLoginActions,
 }: AuthorizeMiddlewareProps<T, U>) => {
   const router = express.Router();
   router.get(
@@ -324,6 +331,12 @@ export const authorizeMiddleware = <
           upsertOauthProfile,
           updateUserFromOauthProfile,
         );
+
+        await runPostLoginActions(postLoginActions, {
+          accessToken: tokenResp.access_token,
+          profile: dlProfile,
+          userId,
+        });
 
         req.session.user = {
           userId,
@@ -422,6 +435,11 @@ export interface BearerMiddlewareProps<
   upsertOauthProfile: UpsertOauthProfileFunction<U>;
   updateUserFromOauthProfile?: UpdateUserFromOauthProfileFunction<T, U>;
   authErrorHandler: ERROR_HANDLER_TYPE;
+  // Optional. Side-effects to run after the bearer token's user has been
+  // resolved (image upload, audit log, etc.). See ./postLoginActions.
+  // Actions are fired on every authenticated request — they should
+  // self-deduplicate. Errors are logged and swallowed.
+  postLoginActions?: PostLoginAction[];
 }
 /*
  * aim to keep the getLoggedInUser function returning the logged in user even if whitelisted
@@ -435,6 +453,7 @@ export const bearerMiddleware =
     upsertOauthProfile,
     updateUserFromOauthProfile = undefined,
     authErrorHandler = DEFAULT_ERROR_HANDLER(401),
+    postLoginActions,
   }: BearerMiddlewareProps<T, U>) =>
   async (req: LocalRequest, res: LocalResponse, next: LocalNextFunction) => {
     const path = req.baseUrl + req.path;
@@ -477,6 +496,11 @@ export const bearerMiddleware =
           upsertOauthProfile,
           updateUserFromOauthProfile,
         );
+        await runPostLoginActions(postLoginActions, {
+          accessToken: token,
+          profile: dlProfile,
+          userId: dlUserId,
+        });
         return dlUserId;
       })();
 

@@ -3,6 +3,30 @@ import logging from './logging';
 
 export { forwardedFor } from './forwardedFor';
 export { config, logging };
+export type { Image, ImageServiceClient } from './imageService';
+export {
+  saveImageToService,
+  downloadAndStoreImage,
+  getImageUrl,
+} from './imageService';
+export type { OauthProfile, User } from './userDataService';
+export {
+  getUserById,
+  getUserByEmail,
+  createUser,
+  updateUser,
+  getOauthProfileBySub,
+  upsertOauthProfile,
+} from './userDataService';
+export type {
+  PictureUploadActionOptions,
+  PostLoginAction,
+  PostLoginActionContext,
+} from './postLoginActions';
+export {
+  createPictureUploadAction,
+  runPostLoginActions,
+} from './postLoginActions';
 export {
   createMailer,
   getMailTransportConfig,

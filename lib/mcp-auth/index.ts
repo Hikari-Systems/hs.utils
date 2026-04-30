@@ -16,6 +16,7 @@ import {
   createDbDcrRateLimitStore,
   createDbJwksCache,
 } from './dbStores';
+import type { PostLoginAction } from '../postLoginActions';
 import type { McpUserResolver } from './userResolution';
 
 export type { AuthConfig } from './config';
@@ -82,6 +83,13 @@ export type McpAuthOptions = McpAuthStores & {
   // `extra.authInfo.extra.userId` / `extra.authInfo.extra.profile`. Use
   // `createOidcUserResolver` for the standard impl.
   userResolver?: McpUserResolver;
+  // Optional. Side-effects to run after each successful user resolution:
+  // image uploads, audit logs, role provisioning, welcome emails, etc.
+  // Actions run in parallel; errors are logged and swallowed so a failing
+  // action can't break the request. Action implementations should
+  // self-deduplicate (e.g. via an in-process Set) since they will run on
+  // every authenticated request unless they short-circuit.
+  postLoginActions?: PostLoginAction[];
 };
 
 export const applyMcpAuth = (
@@ -126,6 +134,12 @@ export const applyMcpAuth = (
   }
 
   app.use(
-    createMcpAuthMiddleware(config, jwks, resourcePath, options.userResolver),
+    createMcpAuthMiddleware(
+      config,
+      jwks,
+      resourcePath,
+      options.userResolver,
+      options.postLoginActions,
+    ),
   );
 };
