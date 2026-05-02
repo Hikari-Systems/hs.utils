@@ -17,6 +17,7 @@ A comprehensive utility library for Node.js development projects at Hikari Syste
   - [Redis Client](#redis-client)
   - [Mail](#mail)
   - [OAuth2 Authentication](#oauth2-authentication)
+  - [MCP OAuth 2.1 Auth](#mcp-oauth-21-auth)
   - [PostgreSQL Configuration](#postgresql-configuration)
   - [LangChain Integration](#langchain-integration)
 - [Type Definitions](#type-definitions)
@@ -491,6 +492,91 @@ Session-based authentication stores user data in `req.session.user`:
   expiresAt: Dayjs | null;
 }
 ```
+
+### MCP OAuth 2.1 Auth
+
+**Location:** `lib/mcp-auth/`
+
+Self-contained OAuth 2.1 resource-server layer for Express-based MCP servers.
+The server never mints tokens — token issuance is delegated to an external
+Authorization Server (default `https://sso.hikari-systems.com`). Every request
+is verified statelessly against the AS's JWKS; there are no cookies and no
+server-side sessions.
+
+#### Discovery and Verification
+
+`applyMcpAuth` mounts:
+
+- `GET /.well-known/oauth-protected-resource` (RFC 9728 PRM, plus the
+  path-suffix variant when `resourcePath` is set)
+- `GET /.well-known/oauth-authorization-server` (RFC 8414 ASM, proxied from
+  the AS and cached for 5 minutes)
+- `GET /.well-known/client-metadata/:client_id` (CIMD lookup)
+- `POST /register` (RFC 7591 DCR — only when `mcp:auth:enableDcr=true`,
+  rate-limited per IP)
+- A bearer-token verification middleware that validates signature, `iss`,
+  `aud`, `exp`, and `nbf` against the AS's JWKS.
+
+#### Configuration
+
+- `mcp:auth:resourceServerUrl`: Canonical resource server URL (required)
+- `mcp:auth:expectedAudience`: Expected JWT `aud` claim (required)
+- `mcp:auth:supportedScopes`: Comma-separated scope list (required)
+- `oauth2:authorizationServer`: AS base URL
+  (default: `https://sso.hikari-systems.com`)
+- `mcp:auth:enableDcr`: Enable Dynamic Client Registration (default: `false`)
+- `mcp:auth:jwksUri`: Override the AS-published JWKS URI (optional)
+- `mcp:auth:clockSkewSeconds`: Clock-skew tolerance (default: `30`)
+
+#### Exports
+
+- `applyMcpAuth(app, config, options?)`: Mount the full discovery + middleware
+  stack on an Express app/router
+- `loadAuthConfig()`: Build `AuthConfig` from `hs.utils` config
+- `createTokenVerifier(config, jwks)`, `TokenVerificationError`
+- `createMcpAuthMiddleware(config, jwks, resourcePath, userResolver?, postLoginActions?)`
+- `handleProtectedResourceMetadata(config, resourcePath)`,
+  `handleAuthServerMetadata(config, asm)`, `normalizeResourcePath(path?)`
+- `createDcrHandler(config, clients, rateLimit)`,
+  `createCimdHandler(clients)`
+- In-memory store factories: `createClientStore`, `createDcrRateLimitStore`,
+  `createJwksCache`, `createAsmCache`
+- DB-backed store factories (against an `mcp-data-service`):
+  `createDbClientStore`, `createDbDcrRateLimitStore`, `createDbJwksCache`,
+  `createDbAsmCache`
+- `createOidcUserResolver(opts)`: Optional `/userinfo`-driven local user
+  upsert that surfaces `{ userId, profile }` on `req.auth.extra`
+- Types: `AuthConfig`, `McpAuthOptions`, `McpAuthStores`, `McpAuthInfo`,
+  `McpResolvedUser`, `McpUserResolver`, `McpUserResolutionOptions`,
+  `ClientRegistration`, `JsonWebKeySet`, `JwksCacheEntry`, `AsmCacheBody`,
+  `McpDataServiceOpts`, `VerificationReason`
+
+#### Usage
+
+```typescript
+import express from 'express';
+import { applyMcpAuth, loadAuthConfig, createOidcUserResolver }
+  from '@hikari-systems/hs.utils';
+
+const app = express();
+
+applyMcpAuth(app, loadAuthConfig(), {
+  resourcePath: '/mcp',
+  userResolver: createOidcUserResolver({
+    getUserBySub: async (sub) => { /* ... */ },
+    upsertUserFromProfile: async (sub, profile) => { /* ... */ },
+  }),
+  postLoginActions: [
+    async ({ userId, profile }) => { /* audit, role provisioning, etc. */ },
+  ],
+});
+
+// Mount MCP routes after applyMcpAuth so they sit behind verification.
+app.post('/mcp', /* ... */);
+```
+
+After verification, MCP tool handlers see the verified JWT (and any resolved
+user) on `req.auth` / `req.auth.extra`.
 
 ### PostgreSQL Configuration
 
