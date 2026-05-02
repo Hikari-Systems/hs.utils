@@ -527,6 +527,10 @@ server-side sessions.
 - `mcp:auth:enableDcr`: Enable Dynamic Client Registration (default: `false`)
 - `mcp:auth:jwksUri`: Override the AS-published JWKS URI (optional)
 - `mcp:auth:clockSkewSeconds`: Clock-skew tolerance (default: `30`)
+- `mcp:auth:claimsNamespace`: Custom-claims namespace prefix used by the
+  Kratos resolver (default: `https://hikari-systems.com/`)
+- `hydra:adminUrl`: Ory Hydra admin URL (used by `createHydraClientStore`)
+- `kratos:adminUrl`: Ory Kratos admin URL (used by `createKratosUserResolver`)
 
 #### Exports
 
@@ -544,8 +548,16 @@ server-side sessions.
 - DB-backed store factories (against an `mcp-data-service`):
   `createDbClientStore`, `createDbDcrRateLimitStore`, `createDbJwksCache`,
   `createDbAsmCache`
+- `createHydraClientStore({ hydraAdminUrl })`: Read-through `ClientStore`
+  backed by Ory Hydra's admin API (Hydra owns DCR, so writes go to Hydra's
+  public `/oauth2/register`)
 - `createOidcUserResolver(opts)`: Optional `/userinfo`-driven local user
   upsert that surfaces `{ userId, profile }` on `req.auth.extra`
+- `createKratosUserResolver({ kratosAdminUrl, claimsNamespace?, fallbackToKratosAdmin?, cacheTtlMs? })`:
+  Resolver that derives the user from namespaced JWT claims (default
+  namespace `https://hikari-systems.com/`), with an optional Kratos
+  `/admin/identities/{sub}` fallback when claims are missing. Uses the
+  Kratos identity ID (== `sub`) as the user ID — no UDS upsert required
 - Types: `AuthConfig`, `McpAuthOptions`, `McpAuthStores`, `McpAuthInfo`,
   `McpResolvedUser`, `McpUserResolver`, `McpUserResolutionOptions`,
   `ClientRegistration`, `JsonWebKeySet`, `JwksCacheEntry`, `AsmCacheBody`,

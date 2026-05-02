@@ -8,6 +8,16 @@ export type AuthConfig = {
   enableDcr: boolean;
   jwksUri?: string;
   clockSkewSeconds: number;
+  // Optional admin URLs for self-hosted Ory stack. When present, MCP servers
+  // can use createHydraClientStore (CIMD lookup) and createKratosUserResolver
+  // (identity lookup) instead of the legacy mcp-data-service / UDS path.
+  // Empty string when not configured.
+  hydraAdminUrl?: string;
+  kratosAdminUrl?: string;
+  // Custom claims namespace prefix. Used by createKratosUserResolver to read
+  // email/name/picture from JWT payload. Defaults to
+  // 'https://hikari-systems.com/'.
+  claimsNamespace?: string;
 };
 
 const requiredString = (key: string): string => {
@@ -52,6 +62,17 @@ export const loadAuthConfig = (): AuthConfig => {
   );
   const jwksUriRaw = config.configString('mcp:auth:jwksUri', '');
   const jwksUri = jwksUriRaw === '' ? undefined : jwksUriRaw;
+  const hydraAdminUrlRaw = config.configString('hydra:adminUrl', '');
+  const hydraAdminUrl = hydraAdminUrlRaw === '' ? undefined : hydraAdminUrlRaw;
+  const kratosAdminUrlRaw = config.configString('kratos:adminUrl', '');
+  const kratosAdminUrl =
+    kratosAdminUrlRaw === '' ? undefined : kratosAdminUrlRaw;
+  const claimsNamespaceRaw = config.configString(
+    'mcp:auth:claimsNamespace',
+    '',
+  );
+  const claimsNamespace =
+    claimsNamespaceRaw === '' ? undefined : claimsNamespaceRaw;
 
   return {
     resourceServerUrl,
@@ -61,5 +82,8 @@ export const loadAuthConfig = (): AuthConfig => {
     enableDcr,
     jwksUri,
     clockSkewSeconds,
+    hydraAdminUrl,
+    kratosAdminUrl,
+    claimsNamespace,
   };
 };

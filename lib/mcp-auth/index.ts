@@ -63,6 +63,10 @@ export {
   createDbDcrRateLimitStore,
   createDbJwksCache,
 } from './dbStores';
+export type { HydraClientStoreOpts } from './hydraClientStore';
+export { createHydraClientStore } from './hydraClientStore';
+export type { KratosResolverOpts } from './kratosResolver';
+export { createKratosUserResolver } from './kratosResolver';
 
 export type McpAuthStores = {
   clients?: ClientStore;
