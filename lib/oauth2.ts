@@ -10,7 +10,7 @@ import { PostLoginAction, runPostLoginActions } from './postLoginActions';
 
 const log = logging('middleware:authentication');
 
-interface TokenResponse {
+export interface TokenResponse {
   access_token: string;
   refresh_token?: string;
   expires_in: number;
@@ -32,7 +32,7 @@ export interface OauthProfileResponse {
   updated_at?: string;
 }
 
-const doTokenExchange = async (
+export const doTokenExchange = async (
   code: string,
   redirectUri: string,
 ): Promise<TokenResponse> => {
@@ -64,7 +64,9 @@ const doTokenExchange = async (
   }
 };
 
-const doTokenRefresh = async (refreshToken: string): Promise<TokenResponse> => {
+export const doTokenRefresh = async (
+  refreshToken: string,
+): Promise<TokenResponse> => {
   try {
     // RFC 6749 §6: refresh request also requires application/x-www-form-urlencoded.
     // Field name is `refresh_token`, not `token` (Auth0 quirk we used to depend on).
@@ -91,7 +93,7 @@ const doTokenRefresh = async (refreshToken: string): Promise<TokenResponse> => {
   }
 };
 
-const getOauthProfileByToken = async (
+export const getOauthProfileByToken = async (
   token: string,
 ): Promise<OauthProfileResponse> => {
   try {
@@ -379,6 +381,10 @@ export const authorizeMiddleware = <
         const user = req?.session?.user;
         return user?.userId || null;
       };
+      req.getLoggedInUserProfile = () => {
+        const user = req?.session?.user;
+        return user?.profile ?? null;
+      };
       req.getAccessToken = async (): Promise<string | null> => {
         const user = req?.session?.user;
         if (!user) {
@@ -514,6 +520,7 @@ export const bearerMiddleware =
       })();
 
       req.getLoggedInUserId = (): string | null => userId || null;
+      req.getLoggedInUserProfile = () => null;
       req.getAccessToken = async (): Promise<string | null> =>
         token === '' ? null : token;
       return next();

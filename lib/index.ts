@@ -55,8 +55,30 @@ export {
   OauthProfileResponse,
   OauthProfileType,
   RedirectStore,
+  TokenResponse,
   UserBaseType,
+  doTokenExchange,
+  doTokenRefresh,
+  getOauthProfileByToken,
 } from './oauth2';
+export {
+  authorizeKratosMiddleware,
+  AuthorizeKratosMiddlewareProps,
+} from './oauth2-kratos';
+export type { KratosClaimProfile, KratosTermsClaim } from './kratos/claims';
+export { DEFAULT_CLAIMS_NAMESPACE, readKratosClaims } from './kratos/claims';
+export type {
+  KratosSessionProfile,
+  KratosSessionResolver,
+  KratosSessionResolverOpts,
+  KratosSessionUser,
+} from './kratos/sessionResolver';
+export { createKratosSessionResolver } from './kratos/sessionResolver';
+export type {
+  KratosIdentityWriter,
+  KratosIdentityWriterOpts,
+} from './kratos/identityWriter';
+export { createKratosIdentityWriter } from './kratos/identityWriter';
 export {
   ChatHSTogetherAI,
   ChatHSTogetherAICallOptions,

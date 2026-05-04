@@ -1,17 +1,18 @@
 import type { JWTPayload } from 'jose';
 import logging from '../logging';
 import { OauthProfileResponse } from '../oauth2';
+import { DEFAULT_CLAIMS_NAMESPACE, readKratosClaims } from '../kratos/claims';
 import { McpResolvedUser, McpUserResolver } from './userResolution';
 
 const log = logging('mcp-auth:kratosResolver');
 
 const DEFAULT_TTL_MS = 5 * 60 * 1000;
-const DEFAULT_NAMESPACE = 'https://hikari-systems.com/';
 
 type KratosTraits = {
   email?: string;
   name?: string;
   picture?: string;
+  pictureId?: string;
 };
 
 type KratosMetadataPublic = {
@@ -25,26 +26,18 @@ type KratosIdentity = {
   verifiable_addresses?: { value: string; verified: boolean; via: string }[];
 };
 
-const claim = (
-  payload: Record<string, unknown>,
-  key: string,
-): string | undefined => {
-  const v = payload[key];
-  return typeof v === 'string' && v.length > 0 ? v : undefined;
-};
-
 const profileFromClaims = (
   payload: JWTPayload,
   ns: string,
 ): OauthProfileResponse | undefined => {
   const sub = payload.sub;
   if (typeof sub !== 'string' || sub.length === 0) return undefined;
-  const p = payload as Record<string, unknown>;
+  const claims = readKratosClaims(payload as Record<string, unknown>, ns);
   return {
     sub,
-    email: claim(p, `${ns}email`),
-    name: claim(p, `${ns}name`),
-    picture: claim(p, `${ns}picture`),
+    email: claims.email,
+    name: claims.name,
+    picture: claims.pictureImageServiceId,
   };
 };
 
@@ -75,7 +68,7 @@ export const createKratosUserResolver = (
   if (!adminUrl) {
     throw new Error('createKratosUserResolver: kratosAdminUrl is required');
   }
-  const ns = opts.claimsNamespace ?? DEFAULT_NAMESPACE;
+  const ns = opts.claimsNamespace ?? DEFAULT_CLAIMS_NAMESPACE;
   const fallback = opts.fallbackToKratosAdmin ?? true;
   const ttlMs = opts.cacheTtlMs ?? DEFAULT_TTL_MS;
   const cache = new Map<
@@ -134,7 +127,13 @@ export const createKratosUserResolver = (
           sub,
           email: identity.traits?.email ?? profile?.email,
           name: identity.traits?.name ?? profile?.name,
-          picture: identity.traits?.picture ?? profile?.picture,
+          // Mirror the namespaced pictureId claim into the standard
+          // OauthProfileResponse.picture slot so MCP consumers see one
+          // unified field.
+          picture:
+            identity.traits?.pictureId ??
+            identity.traits?.picture ??
+            profile?.picture,
         };
       }
     }
