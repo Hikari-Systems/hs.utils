@@ -37,17 +37,22 @@ const doTokenExchange = async (
   redirectUri: string,
 ): Promise<TokenResponse> => {
   try {
+    // RFC 6749 §4.1.3: token endpoint requires application/x-www-form-urlencoded.
+    // Auth0 was lenient and accepted JSON; Hydra (RFC-strict) returns
+    // "invalid_request: The POST body can not be empty" when sent JSON.
+    const body = new URLSearchParams({
+      client_id: config.get('oauth2:clientId'),
+      client_secret: config.get('oauth2:clientSecret'),
+      grant_type: 'authorization_code',
+      redirect_uri: redirectUri,
+      code,
+    });
     const response = await fetch(config.get('oauth2:tokenUrl'), {
       method: 'POST',
-      body: JSON.stringify({
-        client_id: config.get('oauth2:clientId'),
-        client_secret: config.get('oauth2:clientSecret'),
-        grant_type: 'authorization_code',
-        redirect_uri: redirectUri,
-        code,
-      }),
+      body: body.toString(),
       headers: {
-        'Content-type': 'application/json',
+        'Content-type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
       },
     });
     const tokenResponse = await response.text();
@@ -61,16 +66,20 @@ const doTokenExchange = async (
 
 const doTokenRefresh = async (refreshToken: string): Promise<TokenResponse> => {
   try {
+    // RFC 6749 §6: refresh request also requires application/x-www-form-urlencoded.
+    // Field name is `refresh_token`, not `token` (Auth0 quirk we used to depend on).
+    const body = new URLSearchParams({
+      client_id: config.get('oauth2:clientId'),
+      client_secret: config.get('oauth2:clientSecret'),
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+    });
     const response = await fetch(config.get('oauth2:tokenUrl'), {
       method: 'POST',
-      body: JSON.stringify({
-        client_id: config.get('oauth2:clientId'),
-        client_secret: config.get('oauth2:clientSecret'),
-        grant_type: 'refresh_token',
-        token: refreshToken,
-      }),
+      body: body.toString(),
       headers: {
-        'Content-type': 'application/json',
+        'Content-type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
       },
     });
     const tokenResponse = await response.text();
