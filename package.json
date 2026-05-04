@@ -80,7 +80,8 @@
   },
   "overrides": {
     "langsmith": ">=0.4.6",
-    "fast-xml-parser": ">=5.3.6"
+    "fast-xml-parser": ">=5.3.6",
+    "uuid": "^14.0.0"
   },
   "keywords": [
     "hikari",
