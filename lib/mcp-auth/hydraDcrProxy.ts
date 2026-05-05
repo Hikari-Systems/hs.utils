@@ -1,8 +1,15 @@
 import express, { RequestHandler } from 'express';
 import logging from '../logging';
-import { AuthConfig } from './config';
 
 const log = logging('mcp-auth:hydraDcrProxy');
+
+// Minimal config the DCR proxy needs. Kept narrow so callers that aren't
+// MCP servers themselves (e.g. hs-login-controller hosting the proxy) don't
+// have to fabricate MCP-specific fields like expectedAudience.
+export type HydraDcrProxyConfig = {
+  authorizationServerUrl: string;
+  allowedAudiences: string[];
+};
 
 const jsonError = (
   res: express.Response,
@@ -28,7 +35,7 @@ const jsonError = (
 // that flows through to the access token's `aud` claim. Per-token scoping
 // happens at auth time (Apache rewrites resource→audience there).
 export const createHydraDcrProxyHandler = (
-  config: AuthConfig,
+  config: HydraDcrProxyConfig,
 ): RequestHandler => {
   if (config.allowedAudiences.length === 0) {
     throw new Error(
