@@ -56,6 +56,10 @@ const writeSessionFromTokenResponse = (
     userId: user.sub,
     accessToken: tokenResp.access_token,
     refreshToken: tokenResp?.refresh_token,
+    // Stash id_token so apps can hand it to Hydra's RP-initiated logout
+    // endpoint as `id_token_hint`. Hydra v2+ rejects logout requests that
+    // pair `post_logout_redirect_uri` with a missing hint.
+    idToken: tokenResp?.id_token ?? null,
     expiresAt: tokenResp?.expires_in
       ? dayjs().add(tokenResp.expires_in, 'second')
       : null,

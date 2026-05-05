@@ -21,6 +21,12 @@ export interface User {
   userId: string;
   accessToken: string | null;
   refreshToken?: string | null;
+  // ID token from the original OIDC token response. Kept around so the
+  // application can pass it as `id_token_hint` to Hydra's RP-initiated
+  // logout endpoint — without it Hydra rejects logout requests that
+  // also carry a `post_logout_redirect_uri`. Optional for back-compat
+  // with sessions written by older versions.
+  idToken?: string | null;
   expiresAt: Dayjs | null;
   // Kratos identity snapshot. Optional so legacy session payloads remain
   // compatible.
