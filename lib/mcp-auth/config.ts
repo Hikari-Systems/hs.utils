@@ -18,6 +18,14 @@ export type AuthConfig = {
   // email/name/picture from JWT payload. Defaults to
   // 'https://hikari-systems.com/'.
   claimsNamespace?: string;
+  // Audience allowlist used by the Hydra DCR proxy when registering a new
+  // client: the set of resource URLs the registered client is permitted to
+  // request via the `audience` parameter at /oauth2/auth (or /oauth2/token).
+  // Hydra's RFC 8707 `resource` parameter is unimplemented in v2.x; the Ory
+  // `audience` parameter is the actual mechanism. Per-token aud is narrowed
+  // to whatever the client requests from this list. Empty when the service
+  // does not host the proxy. Parsed from comma-separated string.
+  allowedAudiences: string[];
 };
 
 const requiredString = (key: string): string => {
@@ -44,6 +52,12 @@ const parseScopes = (raw: string): string[] => {
   }
   return scopes;
 };
+
+const parseCsv = (raw: string): string[] =>
+  raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 
 export const loadAuthConfig = (): AuthConfig => {
   const resourceServerUrl = requiredString('mcp:auth:resourceServerUrl');
@@ -73,6 +87,9 @@ export const loadAuthConfig = (): AuthConfig => {
   );
   const claimsNamespace =
     claimsNamespaceRaw === '' ? undefined : claimsNamespaceRaw;
+  const allowedAudiences = parseCsv(
+    config.configString('mcp:auth:allowedAudiences', ''),
+  );
 
   return {
     resourceServerUrl,
@@ -85,5 +102,6 @@ export const loadAuthConfig = (): AuthConfig => {
     hydraAdminUrl,
     kratosAdminUrl,
     claimsNamespace,
+    allowedAudiences,
   };
 };

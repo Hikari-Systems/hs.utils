@@ -30,6 +30,7 @@ export { createTokenVerifier, TokenVerificationError } from './tokenVerifier';
 export type { VerificationReason } from './tokenVerifier';
 export { createMcpAuthMiddleware } from './middleware';
 export { createDcrHandler } from './dcr';
+export { createHydraDcrProxyHandler } from './hydraDcrProxy';
 export { createCimdHandler } from './cimd';
 
 export type {
