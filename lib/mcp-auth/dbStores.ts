@@ -23,16 +23,16 @@ type Resolved = { baseUrl: string; apiKey: string };
 const resolveOpts = (opts?: McpDataServiceOpts): Resolved => {
   const baseUrl = (
     opts?.baseUrl ??
-    config.configString('mcpDataService:url', 'http://mcp-data-service:3000')
+    config.configString('mcp-data-service:url', 'http://mcp-data-service:3000')
   )
     .trim()
     .replace(/\/+$/, '');
   const apiKey = (
-    opts?.apiKey ?? config.configString('mcpDataService:apiKey', '')
+    opts?.apiKey ?? config.configString('mcp-data-service:apiKey', '')
   ).trim();
   if (baseUrl === '') {
     throw new Error(
-      'mcp-data-service: baseUrl is empty; set "mcpDataService:url" in config.',
+      'mcp-data-service: baseUrl is empty; set "mcp-data-service:url" in config.',
     );
   }
   return { baseUrl, apiKey };
