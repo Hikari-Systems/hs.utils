@@ -1,7 +1,5 @@
 /* eslint-disable no-restricted-syntax */
 /* eslint-disable no-underscore-dangle */
-/* eslint-disable no-continue */
-/* eslint-disable no-await-in-loop */
 import {
   BindToolsInput,
   SimpleChatModel,
@@ -41,7 +39,6 @@ const mapMessages = (
   messages: BaseMessage[],
 ): CompletionCreateParams.Message[] =>
   messages.map((m) => {
-    // eslint-disable-next-line no-underscore-dangle
     switch (m._getType()) {
       case 'system': {
         return { role: 'system', content: `${m.content}` };
@@ -103,7 +100,7 @@ export class ChatHSTogetherAI extends SimpleChatModel<ChatHSTogetherAICallOption
     this.apiKey = fields.apiKey || '';
   }
 
-  // eslint-disable-next-line no-underscore-dangle, class-methods-use-this
+  // eslint-disable-next-line class-methods-use-this
   _llmType() {
     return 'hsTogetherAI';
   }
@@ -116,13 +113,12 @@ export class ChatHSTogetherAI extends SimpleChatModel<ChatHSTogetherAICallOption
     AIMessageChunk,
     ChatHSTogetherAICallOptions
   > {
-    return this.bind({
+    return this.withConfig({
       tools: tools.map((tool) => convertToOpenAITool(tool)),
       ...kwargs,
     } as Partial<ChatHSTogetherAICallOptions>);
   }
 
-  // eslint-disable-next-line no-underscore-dangle, class-methods-use-this
   async _call(
     messages: BaseMessage[],
     options: this['ParsedCallOptions'],
@@ -168,7 +164,6 @@ export class ChatHSTogetherAI extends SimpleChatModel<ChatHSTogetherAICallOption
           '[WARNING]: Received non-string content from TogetherAI. This is currently not supported.',
         );
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const generationInfo: Record<string, any> = {};
       if (choice.finish_reason != null) {
         generationInfo.finish_reason = choice.finish_reason;
@@ -254,7 +249,6 @@ export class ChatHSTogetherAI extends SimpleChatModel<ChatHSTogetherAICallOption
 
   // eslint-disable-next-line class-methods-use-this
   protected _convertOpenAIDeltaToBaseMessageChunk(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     delta: Record<string, any>,
     id: string,
     defaultRole?: string,
@@ -318,7 +312,6 @@ export class ChatHSTogetherAI extends SimpleChatModel<ChatHSTogetherAICallOption
     return new ChatMessageChunk({ content, role });
   }
 
-  // eslint-disable-next-line no-underscore-dangle, class-methods-use-this
   async *_streamResponseChunks(
     messages: BaseMessage[],
     options: this['ParsedCallOptions'],
@@ -349,7 +342,6 @@ export class ChatHSTogetherAI extends SimpleChatModel<ChatHSTogetherAICallOption
     });
     // Pass `runManager?.getChild()` when invoking internal runnables to enable tracing
     // await subRunnable.invoke(params, runManager?.getChild());
-    // eslint-disable-next-line no-restricted-syntax
     let defaultRole: string | undefined;
     for await (const data of stream) {
       // const token = chunk.choices[0].delta.content || '';
@@ -388,7 +380,6 @@ export class ChatHSTogetherAI extends SimpleChatModel<ChatHSTogetherAICallOption
         );
         continue;
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const generationInfo: Record<string, any> = { ...newTokenIndices };
       if (choice.finish_reason != null) {
         generationInfo.finish_reason = choice.finish_reason;

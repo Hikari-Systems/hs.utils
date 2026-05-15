@@ -6,10 +6,11 @@ import config from './config';
 import logging from './logging';
 import { LocalNextFunction, LocalRequest, LocalResponse } from './types';
 import { forwardedFor } from './forwardedFor';
+import { PostLoginAction, runPostLoginActions } from './postLoginActions';
 
 const log = logging('middleware:authentication');
 
-interface TokenResponse {
+export interface TokenResponse {
   access_token: string;
   refresh_token?: string;
   expires_in: number;
@@ -31,22 +32,27 @@ export interface OauthProfileResponse {
   updated_at?: string;
 }
 
-const doTokenExchange = async (
+export const doTokenExchange = async (
   code: string,
   redirectUri: string,
 ): Promise<TokenResponse> => {
   try {
+    // RFC 6749 §4.1.3: token endpoint requires application/x-www-form-urlencoded.
+    // Auth0 was lenient and accepted JSON; Hydra (RFC-strict) returns
+    // "invalid_request: The POST body can not be empty" when sent JSON.
+    const body = new URLSearchParams({
+      client_id: config.get('oauth2:clientId'),
+      client_secret: config.get('oauth2:clientSecret'),
+      grant_type: 'authorization_code',
+      redirect_uri: redirectUri,
+      code,
+    });
     const response = await fetch(config.get('oauth2:tokenUrl'), {
       method: 'POST',
-      body: JSON.stringify({
-        client_id: config.get('oauth2:clientId'),
-        client_secret: config.get('oauth2:clientSecret'),
-        grant_type: 'authorization_code',
-        redirect_uri: redirectUri,
-        code,
-      }),
+      body: body.toString(),
       headers: {
-        'Content-type': 'application/json',
+        'Content-type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
       },
     });
     const tokenResponse = await response.text();
@@ -58,18 +64,24 @@ const doTokenExchange = async (
   }
 };
 
-const doTokenRefresh = async (refreshToken: string): Promise<TokenResponse> => {
+export const doTokenRefresh = async (
+  refreshToken: string,
+): Promise<TokenResponse> => {
   try {
+    // RFC 6749 §6: refresh request also requires application/x-www-form-urlencoded.
+    // Field name is `refresh_token`, not `token` (Auth0 quirk we used to depend on).
+    const body = new URLSearchParams({
+      client_id: config.get('oauth2:clientId'),
+      client_secret: config.get('oauth2:clientSecret'),
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+    });
     const response = await fetch(config.get('oauth2:tokenUrl'), {
       method: 'POST',
-      body: JSON.stringify({
-        client_id: config.get('oauth2:clientId'),
-        client_secret: config.get('oauth2:clientSecret'),
-        grant_type: 'refresh_token',
-        token: refreshToken,
-      }),
+      body: body.toString(),
       headers: {
-        'Content-type': 'application/json',
+        'Content-type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
       },
     });
     const tokenResponse = await response.text();
@@ -81,7 +93,7 @@ const doTokenRefresh = async (refreshToken: string): Promise<TokenResponse> => {
   }
 };
 
-const getOauthProfileByToken = async (
+export const getOauthProfileByToken = async (
   token: string,
 ): Promise<OauthProfileResponse> => {
   try {
@@ -260,6 +272,11 @@ export interface AuthorizeMiddlewareProps<
   stateStore: RedirectStore;
   callbackErrorHandler: ERROR_HANDLER_TYPE;
   callbackUri: string;
+  // Optional. Side-effects to run once the user has been resolved at the
+  // end of the OAuth callback (image upload, audit log, etc.). See
+  // ./postLoginActions for the contract. Actions are parallelised and
+  // their errors are swallowed.
+  postLoginActions?: PostLoginAction[];
 }
 
 export const authorizeMiddleware = <
@@ -275,6 +292,7 @@ export const authorizeMiddleware = <
   stateStore = getSessionRedirectStore(),
   callbackErrorHandler = DEFAULT_ERROR_HANDLER(400),
   callbackUri = '/oauth2/callback',
+  postLoginActions,
 }: AuthorizeMiddlewareProps<T, U>) => {
   const router = express.Router();
   router.get(
@@ -325,6 +343,12 @@ export const authorizeMiddleware = <
           updateUserFromOauthProfile,
         );
 
+        await runPostLoginActions(postLoginActions, {
+          accessToken: tokenResp.access_token,
+          profile: dlProfile,
+          userId,
+        });
+
         req.session.user = {
           userId,
           accessToken: tokenResp.access_token,
@@ -356,6 +380,10 @@ export const authorizeMiddleware = <
       req.getLoggedInUserId = (): string | null => {
         const user = req?.session?.user;
         return user?.userId || null;
+      };
+      req.getLoggedInUserProfile = () => {
+        const user = req?.session?.user;
+        return user?.profile ?? null;
       };
       req.getAccessToken = async (): Promise<string | null> => {
         const user = req?.session?.user;
@@ -422,6 +450,11 @@ export interface BearerMiddlewareProps<
   upsertOauthProfile: UpsertOauthProfileFunction<U>;
   updateUserFromOauthProfile?: UpdateUserFromOauthProfileFunction<T, U>;
   authErrorHandler: ERROR_HANDLER_TYPE;
+  // Optional. Side-effects to run after the bearer token's user has been
+  // resolved (image upload, audit log, etc.). See ./postLoginActions.
+  // Actions are fired on every authenticated request — they should
+  // self-deduplicate. Errors are logged and swallowed.
+  postLoginActions?: PostLoginAction[];
 }
 /*
  * aim to keep the getLoggedInUser function returning the logged in user even if whitelisted
@@ -435,6 +468,7 @@ export const bearerMiddleware =
     upsertOauthProfile,
     updateUserFromOauthProfile = undefined,
     authErrorHandler = DEFAULT_ERROR_HANDLER(401),
+    postLoginActions,
   }: BearerMiddlewareProps<T, U>) =>
   async (req: LocalRequest, res: LocalResponse, next: LocalNextFunction) => {
     const path = req.baseUrl + req.path;
@@ -477,10 +511,16 @@ export const bearerMiddleware =
           upsertOauthProfile,
           updateUserFromOauthProfile,
         );
+        await runPostLoginActions(postLoginActions, {
+          accessToken: token,
+          profile: dlProfile,
+          userId: dlUserId,
+        });
         return dlUserId;
       })();
 
       req.getLoggedInUserId = (): string | null => userId || null;
+      req.getLoggedInUserProfile = () => null;
       req.getAccessToken = async (): Promise<string | null> =>
         token === '' ? null : token;
       return next();
