@@ -9,6 +9,9 @@ const log = logging('mcp-auth:hydraDcrProxy');
 export type HydraDcrProxyConfig = {
   authorizationServerUrl: string;
   allowedAudiences: string[];
+  // Inject `skip_consent: true` into proxied client registrations so the
+  // consent bridge auto-accepts MCP clients. Defaults to true.
+  skipConsent?: boolean;
 };
 
 const jsonError = (
@@ -75,7 +78,15 @@ export const createHydraDcrProxyHandler = (
       upstreamResp = await fetch(upstream, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...body, audience }),
+        // skip_consent marks the client consent-exempt; the consent bridge
+        // auto-accepts on this flag (with an audience-based fallback if Hydra
+        // strips it on the public registration endpoint). Gated by config,
+        // on by default.
+        body: JSON.stringify({
+          ...body,
+          audience,
+          ...(config.skipConsent !== false ? { skip_consent: true } : {}),
+        }),
       });
     } catch (err) {
       log.error(
