@@ -24,7 +24,7 @@ import {
   ChatResult,
 } from '@langchain/core/outputs';
 import Together from 'together-ai';
-import { CompletionCreateParams } from 'together-ai/resources/chat/completions.mjs';
+import { ChatCompletionMessageParam } from 'together-ai/resources/chat/completions.mjs';
 import { Runnable } from '@langchain/core/runnables';
 import {
   BaseFunctionCallOptions,
@@ -35,9 +35,7 @@ import logging from '../logging';
 
 const log = logging('langchain:chatTogether');
 
-const mapMessages = (
-  messages: BaseMessage[],
-): CompletionCreateParams.Message[] =>
+const mapMessages = (messages: BaseMessage[]): ChatCompletionMessageParam[] =>
   messages.map((m) => {
     switch (m._getType()) {
       case 'system': {
@@ -54,11 +52,11 @@ const mapMessages = (
           tool_calls: aiMsg.tool_calls?.length
             ? aiMsg.tool_calls?.map((f, idx) => ({
                 index: idx,
-                id: f.id,
-                type: 'function',
+                id: f.id ?? '',
+                type: 'function' as const,
                 function: {
                   name: f.name,
-                  arguments: f.args,
+                  arguments: JSON.stringify(f.args),
                 },
               }))
             : undefined, // this probably needs better mapping
