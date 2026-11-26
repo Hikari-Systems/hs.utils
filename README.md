@@ -14,6 +14,7 @@ A comprehensive utility library for Node.js development projects at Hikari Syste
     - [API Key Middleware](#api-key-middleware)
     - [Session Middleware](#session-middleware)
     - [Timing Middleware](#timing-middleware)
+  - [OpenTelemetry](#opentelemetry)
   - [Redis Client](#redis-client)
   - [Mail](#mail)
   - [OAuth2 Authentication](#oauth2-authentication)
@@ -263,6 +264,123 @@ app.use(timingMiddleware);
 // Logs: STARTED: GET /api/users
 // Logs: COMPLETED in 123ms: GET /api/users
 ```
+
+### OpenTelemetry
+
+**Location:** `lib/otel/` (exported as `otel`)
+
+Traces and metrics over OTLP/HTTP, with the same config keys, span names, metric names, units, attributes and
+defaults as the Rust `hs-utils` crate's `otel` module, so one set of queries reads services in either language.
+Inert unless `otel:enabled` is true: nothing is started or registered globally, every span is a no-op and no
+metric is kept.
+
+#### Configuration
+
+| Key | Default | Meaning |
+|---|---|---|
+| `otel:enabled` | `false` | Master switch |
+| `otel:endpoint` | `https://api.honeycomb.io` | OTLP/HTTP base; `/v1/traces` and `/v1/metrics` are appended |
+| `otel:apiKey` | | Sent as `x-honeycomb-team` when set (use `[SECRET]:`) |
+| `otel:apiKeyRequired` | `true` | Refuse to export without `apiKey`; set `false` for a local Collector |
+| `otel:serviceName` | `unknown_service` | `service.name` resource attribute |
+| `otel:environment` | | `deployment.environment.name` resource attribute, when set |
+| `otel:sampleRatio` | `1` | Head sampling, parent-based |
+| `otel:level` | `log:level` | Export level: at `info`, `debug` spans (quiet paths, polling calls) are counted, not exported |
+| `otel:metricsEnabled` | `true` | Export metrics as well as traces |
+| `otel:metricsIntervalSecs` | `60` | Metrics collection and export interval |
+| `otel:metricsDataset` | | Sent as `x-honeycomb-dataset` on metric exports only |
+| `otel:processMetrics` | `true` | Process and container (cgroup v2) metrics |
+| `otel:durationBuckets` | the HTTP set | Comma-separated histogram boundaries (seconds) for the HTTP and client durations |
+
+The resource is the SDK defaults (`telemetry.sdk.*`, `OTEL_RESOURCE_ATTRIBUTES`) plus `service.name` and
+`deployment.environment.name`. Spans use a tracer named after the service; metrics use the instrumentation scope
+`hs-utils`. Propagation is W3C `traceparent`, with an AsyncLocalStorage context manager.
+
+#### Usage
+
+```typescript
+import express from 'express';
+import { otel } from '@hikari-systems/hs.utils';
+
+otel.init(); // first, before the app is built
+
+const app = express();
+app.use(otel.traceMiddleware()); // before the routes
+app.get('/api/items/:id', async (req, res) => {
+  // traceparent sent on; url.full has query values redacted
+  const r = await otel.fetchTraced(`${base}/api/items/${req.params.id}?full=1`);
+  res.status(r.status).send(await r.text());
+});
+app.use(otel.traceErrorMiddleware()); // optional: records the error on the span
+
+// Any other outbound call:
+await otel.withClientSpan('smtp', 'send', relayHost, () => transport.sendMail(msg));
+
+// Your own spans, in the same tracer:
+const span = otel.tracer().startSpan('render');
+
+process.on('SIGTERM', () => otel.shutdown()); // flushes metrics, then traces
+```
+
+- `traceMiddleware()`: a server span per request named `{METHOD} {route template}` (`GET /api/items/:id`, or
+  `GET <unmatched>`), adopting the caller's `traceparent`, with `http.route`, `url.path` (through
+  `setPathRedactor`, capped), `url.query` (parameter names only), `http.response.status_code` and more; only a 5xx
+  is an error. `/healthcheck` and the paths given to `setQuietPaths` are not exported at `otel:level=info` (their
+  children and outbound calls are unsampled) but are still counted.
+- `fetchTraced(input, init)` / `fetchTracedOpaque(input, init)` / `fetchTracedWith(input, init, { level, opaque, path })`:
+  `fetch` in a client span `{METHOD} {host}`. Opaque records only `scheme://host:port`, for a URL that is its own
+  credential; `path` records a template in place of the real path.
+- `clientSpan(system, operation, peer, level?)`, `recordOutcome(span, outcome)`, `recordError(span, err)`,
+  `withClientSpan(...)`: a span `{system} {operation}` for any other call. Name the operation, never the data.
+- `GenAiCall.start(operation, provider, model, task, streaming)` then `finish(usage)` or `fail(errorType)`, then
+  `end()`: one span and the `gen_ai.*` metrics per model call.
+- `setMetricPeerHosts([...])`: hosts that always keep their own `server.address` label on the HTTP client metrics
+  (otherwise the first 20 dotted hosts do, and later ones are `other`).
+- `registerPoolGauges(pool, 'host/database')`: connection gauges for a `pg.Pool`.
+- `readContainerMemoryUsage()`: the container's cgroup `memory.current`, in bytes, for a span attribute.
+
+#### Metrics
+
+| Metric | Unit | Attributes |
+|---|---|---|
+| `http.server.request.duration` | s | `http.request.method`, `http.route`, `http.response.status_code` |
+| `http.server.active_requests` | `{request}` | `http.request.method` |
+| `http.client.request.duration` | s | `http.request.method`, `server.address`, `http.response.status_code` or `error.type=no_response` |
+| `http.client.response.body.size` | By | `http.request.method`, `server.address`, `hs.http.response.body.compressed` |
+| `hs.client.operation.duration` | s | `client.system`, `client.operation`, `client.outcome` |
+| `gen_ai.client.operation.duration`, `gen_ai.client.operation.time_to_first_chunk` | s | `gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.request.stream`, `hs.gen_ai.task`, `error.type` |
+| `gen_ai.client.token.usage` | `{token}` | as above, plus `gen_ai.token.type` |
+| `hs.gen_ai.client.output_throughput` / `hs.gen_ai.client.cost` | `{token}/s` / USD | as above |
+| `process.cpu.time` (`cpu.mode`), `process.disk.io` (`disk.io.direction`), `hs.process.blkio_delay` | s / By / s | counters |
+| `process.cpu.utilization`, `process.memory.usage`, `process.memory.virtual`, `process.thread.count`, `process.open_file_descriptor.count` | 1 / By / By / `{thread}` / `{file_descriptor}` | gauges |
+| `container.cpu.time`, `hs.container.cpu.throttled_time` | s | counters (cgroup v2) |
+| `hs.container.cpu.limit`, `container.memory.usage`, `hs.container.memory.limit` | `{cpu}` / By / By | gauges (cgroup v2) |
+| `hs.container.memory.oom_kills`, `hs.container.memory.oom_events` | `{event}` | counters, from cgroup `memory.events` `oom_kill` / `oom` |
+| `hs.container.pressure` | % | `resource` (cpu, memory, io), `kind` (some, full) |
+| `v8js.memory.heap.used`, `v8js.memory.heap.limit`, `v8js.memory.heap.space.available_size`, `v8js.memory.heap.space.physical_size` | By | `v8js.heap.space.name` |
+| `nodejs.eventloop.delay.{min,max,mean,stddev,p50,p90,p99}`, `nodejs.eventloop.utilization` | s / 1 | since the last collection |
+| `nodejs.eventloop.time` | s | `nodejs.eventloop.state` (active, idle) |
+| `db.client.connection.count`, `db.client.connection.max` | `{connection}` | `db.client.connection.pool.name`, `db.client.connection.state` |
+
+Duration histograms use the semantic conventions' HTTP boundaries
+`[0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10]`. A file that is missing (not Linux,
+cgroup v1) means no sample, never a zero.
+
+#### Migrating (0.0.86)
+
+New in 0.0.86; nothing existing changes. To replace a hand-written OpenTelemetry setup:
+
+- Call `otel.init()` in place of your own tracer provider set-up, `otel.shutdown()` in place of its shutdown, and
+  `app.use(otel.traceMiddleware())` in place of your server-span middleware. Make your own spans with
+  `otel.tracer()`.
+- Drop your direct dependencies on the OpenTelemetry SDK packages if nothing else uses them; keep
+  `@opentelemetry/api` (`~1.10`, a peer dependency of this package) if your code imports it.
+- The resource attribute is `deployment.environment.name` (current semantic conventions), not
+  `deployment.environment`.
+- `otel:endpoint` defaults to `https://api.honeycomb.io`, and an empty `otel:apiKey` turns export off unless
+  `otel:apiKeyRequired` is `false`: set that when exporting to a Collector.
+- Metrics are on by default; set `otel:metricsEnabled=false` to export traces only.
+- `/healthcheck` is no longer exported at `otel:level=info` (it is still counted in `http.server.request.duration`).
 
 ### Redis Client
 

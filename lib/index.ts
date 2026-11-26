@@ -2,6 +2,7 @@ import config from './config';
 import logging from './logging';
 
 export { forwardedFor } from './forwardedFor';
+export * as otel from './otel';
 export { config, logging };
 export type { Image, ImageServiceClient } from './imageService';
 export {

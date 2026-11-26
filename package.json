@@ -1,6 +1,6 @@
 {
   "name": "@hikari-systems/hs.utils",
-  "version": "0.0.85",
+  "version": "0.0.86",
   "description": "General tools for use in Hikari Systems apps",
   "main": "es2021/index.js",
   "author": "Rick Knowles <rick.knowles@hikari-systems.com>",
@@ -22,6 +22,13 @@
     "@langchain/langgraph-checkpoint": "^1.0.1",
     "@langchain/langgraph-checkpoint-postgres": "^1.0.1",
     "@langchain/openai": "^1.4.5",
+    "@opentelemetry/context-async-hooks": "^3.1.1",
+    "@opentelemetry/core": "^3.1.1",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.301.2",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.301.2",
+    "@opentelemetry/resources": "^3.1.1",
+    "@opentelemetry/sdk-metrics": "^3.1.1",
+    "@opentelemetry/sdk-trace": "^3.1.1",
     "connect-pg-simple": "^10.0.0",
     "connect-redis": "^7.1.1",
     "dayjs": "^1.11.11",
@@ -40,12 +47,14 @@
     "zod": "^3.24.2"
   },
   "peerDependencies": {
+    "@opentelemetry/api": "~1.10.0",
     "@types/express": "^4.17.0",
     "@types/express-serve-static-core": "^4.19.0",
     "@types/express-session": "^1.18.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
+    "@opentelemetry/api": "~1.10.0",
     "@tsconfig/node22": "^22.0.0",
     "@types/connect-pg-simple": "^7.0.3",
     "@types/express": "^4.17.21",
